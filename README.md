@@ -122,11 +122,16 @@ by a particular top-level window. Workspace Halo therefore has two small parts:
 The host is a build artifact, not a separate user-installed component. Closing
 the VS Code window or deactivating the extension stops its host process.
 
+There is one `workspace-halo-host.exe` process per active VS Code workspace
+window that has its exact logo. Unmarked VS Code windows do not start a host.
+
 ## Logs and troubleshooting
 
 Open **View > Output** and select **Workspace Halo** to see extension and host
-messages. The native host also writes `native-host.log` in the extension's VS
-Code log-storage directory for that window.
+messages, including the host PID and native log path. The native host also
+writes `native-host.log` in the extension's VS Code log-storage directory for
+that window. Windows Task Manager's **Details** view, or
+`Get-Process workspace-halo-host`, provides an independent process check.
 
 If no halo appears:
 
