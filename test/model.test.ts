@@ -1,11 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  logicalWorkspaceName,
   optionalWorkspaceScopedValue,
   resolveSharedColor,
   selectLogo,
   workspaceScopedValue
 } from "../src/model";
+
+test("saved workspace names come from the code-workspace filename", () => {
+  assert.equal(
+    logicalWorkspaceName("llm-shared (Workspace)", "llm-shared.code-workspace"),
+    "llm-shared"
+  );
+  assert.equal(logicalWorkspaceName("My Folder", undefined), "My Folder");
+  assert.equal(logicalWorkspaceName(undefined, undefined), undefined);
+});
 
 test("workspace-scoped values ignore global values by construction", () => {
   assert.equal(
@@ -33,4 +43,3 @@ test("workspace Peacock color takes precedence over Workspace Halo color", () =>
   assert.equal(resolveSharedColor(undefined, "#445566", "#ff2d55"), "#445566");
   assert.equal(resolveSharedColor("blue", "invalid", "#ff2d55"), "#ff2d55");
 });
-

@@ -9,6 +9,17 @@ export interface LogoSelection {
 }
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+const WORKSPACE_FILE_SUFFIX = ".code-workspace";
+
+export function logicalWorkspaceName(
+  displayName: string | undefined,
+  workspaceFileName: string | undefined
+): string | undefined {
+  if (workspaceFileName?.toLowerCase().endsWith(WORKSPACE_FILE_SUFFIX)) {
+    return workspaceFileName.slice(0, -WORKSPACE_FILE_SUFFIX.length);
+  }
+  return displayName;
+}
 
 export function workspaceScopedValue<T>(
   inspected: InspectedSetting<T> | undefined,
@@ -52,4 +63,3 @@ export function resolveSharedColor(
   }
   return fallback;
 }
-

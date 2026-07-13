@@ -2,6 +2,7 @@ import { ChildProcess, spawn } from "node:child_process";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import {
+  logicalWorkspaceName,
   optionalWorkspaceScopedValue,
   resolveSharedColor,
   selectLogo,
@@ -128,7 +129,10 @@ class WorkspaceHaloController implements vscode.Disposable {
   }
 
   private async resolveRegistration(): Promise<Registration | undefined> {
-    const workspaceName = vscode.workspace.name;
+    const workspaceFileName = vscode.workspace.workspaceFile?.scheme === "file"
+      ? path.basename(vscode.workspace.workspaceFile.fsPath)
+      : undefined;
+    const workspaceName = logicalWorkspaceName(vscode.workspace.name, workspaceFileName);
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceName === undefined || workspaceFolders === undefined) {
       return undefined;
@@ -233,13 +237,17 @@ class WorkspaceHaloController implements vscode.Disposable {
       args.push("--startup-warning", registration.warning);
     }
 
-    this.output.info(`Starting native host for ${registration.workspaceName}.`);
+    this.output.info(
+      `Tracking ${registration.workspaceName}: root=${registration.root.uri.fsPath}, logo=${registration.logo.fsPath}.`
+    );
+    this.output.info(`Native host log: ${logPath}`);
     const child = spawn(hostPath, args, {
       cwd: registration.root.uri.fsPath,
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true
     });
     this.host = child;
+    this.output.info(`Native host started (pid=${String(child.pid)}).`);
     this.pipeHostOutput(child);
     child.once("error", (error) => {
       this.output.error(`Native host failed to start: ${String(error)}`);
@@ -314,4 +322,3 @@ export async function deactivate(): Promise<void> {
   await controller?.shutdown();
   controller = undefined;
 }
-
