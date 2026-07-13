@@ -3,4 +3,5 @@
 /node_modules/
 /.gocache/
 *.vsix
+a.*
 

@@ -1,5 +1,7 @@
 .gocache/**
 .gitignore
+.vscode/**
+a.*
 bin/workspace-halo-companion.exe
 companion/**
 docs/poc.md
