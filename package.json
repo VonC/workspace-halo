@@ -1,0 +1,98 @@
+{
+  "name": "workspace-halo",
+  "displayName": "Workspace Halo",
+  "description": "Identify VS Code workspace windows with a configurable Alt+Tab halo.",
+  "version": "0.0.1",
+  "publisher": "vonc",
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.99.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "workspace",
+    "window",
+    "alt-tab",
+    "logo",
+    "peacock"
+  ],
+  "extensionKind": [
+    "ui"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "scripts": {
+    "build:native": "powershell -ExecutionPolicy Bypass -File scripts/build-native-host.ps1",
+    "check-types": "tsc --noEmit",
+    "compile": "npm run check-types && node esbuild.mjs",
+    "test": "npm run check-types && tsx --test test/*.test.ts",
+    "vscode:prepublish": "npm run build:native && npm run compile",
+    "package:vsix": "vsce package --target win32-x64 --out workspace-halo-win32-x64.vsix"
+  },
+  "contributes": {
+    "configuration": {
+      "title": "Workspace Halo",
+      "properties": {
+        "workspaceHalo.color": {
+          "type": "string",
+          "default": "#ff2d55",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "scope": "resource",
+          "description": "Shared border and workspace-name color. A workspace-scoped peacock.color value takes priority."
+        },
+        "workspaceHalo.borderWidth": {
+          "type": "integer",
+          "default": 12,
+          "minimum": 1,
+          "maximum": 64,
+          "scope": "resource",
+          "description": "Halo border width in pixels."
+        },
+        "workspaceHalo.borderMotif": {
+          "type": "string",
+          "default": "solid",
+          "enum": [
+            "solid",
+            "double",
+            "dashed",
+            "dotted"
+          ],
+          "scope": "resource",
+          "description": "Halo border motif."
+        },
+        "workspaceHalo.fontFamily": {
+          "type": "string",
+          "default": "Segoe UI",
+          "scope": "resource",
+          "description": "Installed Windows font family used for the workspace name."
+        },
+        "workspaceHalo.fontWeight": {
+          "type": "integer",
+          "default": 700,
+          "minimum": 1,
+          "maximum": 1000,
+          "scope": "resource",
+          "description": "Windows font weight used for the workspace name."
+        },
+        "workspaceHalo.textShadow": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "Draw an automatic dark shadow behind the workspace name."
+        }
+      }
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "@types/vscode": "^1.99.0",
+    "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.28.1",
+    "tsx": "^4.23.0",
+    "typescript": "^7.0.2"
+  }
+}

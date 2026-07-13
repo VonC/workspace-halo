@@ -1,0 +1,13 @@
+.gocache/**
+.gitignore
+bin/workspace-halo-companion.exe
+companion/**
+docs/poc.md
+esbuild.mjs
+node_modules/**
+out/**
+scripts/**
+src/**
+test/**
+tsconfig.json
+*.vsix
