@@ -67,40 +67,77 @@ func TestLogoUpscalesToOneThirdHeight(t *testing.T) {
 
 func TestVisibilityStatePrecedence(t *testing.T) {
 	tests := []struct {
-		manual, altTab, preview, occluded bool
-		wantVisible                       bool
-		wantReason                        string
+		manual, altTab, preview, latched, occluded bool
+		wantVisible                                bool
+		wantReason                                 string
 	}{
-		{true, true, true, true, true, "double-shift"},
-		{false, true, true, true, true, "alt-tab"},
-		{false, false, true, true, true, "shell-preview"},
-		{false, false, false, true, true, "occluded"},
-		{false, false, false, false, false, "hidden"},
+		{true, true, true, true, true, true, "double-shift"},
+		{false, true, true, true, true, true, "alt-tab"},
+		{false, false, true, true, true, true, "shell-preview"},
+		{false, false, false, true, true, true, "latched"},
+		{false, false, false, false, true, true, "occluded"},
+		{false, false, false, false, false, false, "hidden"},
 	}
 	for _, test := range tests {
-		visible, reason := visibilityState(test.manual, test.altTab, test.preview, test.occluded)
+		visible, reason := visibilityState(test.manual, test.altTab, test.preview, test.latched, test.occluded)
 		if visible != test.wantVisible || reason != test.wantReason {
 			t.Errorf(
-				"visibilityState(%t, %t, %t, %t) = (%t, %q), want (%t, %q)",
-				test.manual, test.altTab, test.preview, test.occluded,
+				"visibilityState(%t, %t, %t, %t, %t) = (%t, %q), want (%t, %q)",
+				test.manual, test.altTab, test.preview, test.latched, test.occluded,
 				visible, reason, test.wantVisible, test.wantReason,
 			)
 		}
 	}
 }
 
-func TestShellPreviewClassesCoverBothShells(t *testing.T) {
+func TestShellPreviewClassRecognition(t *testing.T) {
 	for _, class := range []string{
 		"XamlExplorerHostIslandWindow",
+		"XamlExplorerHostIslandWindow_WASDK",
 		"TaskListThumbnailWnd",
 		"MultitaskingViewFrame",
+		"Microsoft.UI.Content.PopupWindowSiteBridge",
 	} {
-		if !shellPreviewClasses[class] {
+		if !isShellPreviewClass(class) {
 			t.Errorf("shell preview class %q is not recognized", class)
 		}
 	}
-	if shellPreviewClasses["Chrome_WidgetWin_1"] {
-		t.Error("an application window class was treated as a shell preview")
+	for _, class := range []string{
+		"Chrome_WidgetWin_1",
+		"Xaml_WindowedPopupClass",
+		"Shell_TrayWnd",
+		"TopLevelWindowForOverflowXamlIsland",
+	} {
+		if isShellPreviewClass(class) {
+			t.Errorf("class %q was wrongly treated as a shell preview", class)
+		}
+	}
+}
+
+func TestTaskbarClassRecognition(t *testing.T) {
+	for _, class := range []string{"Shell_TrayWnd", "Shell_SecondaryTrayWnd"} {
+		if !isTaskbarClass(class) {
+			t.Errorf("taskbar class %q is not recognized", class)
+		}
+	}
+	if isTaskbarClass("Chrome_WidgetWin_1") {
+		t.Error("an application window class was treated as a taskbar")
+	}
+}
+
+func TestPointInRect(t *testing.T) {
+	r := rect{Left: 0, Top: 912, Right: 1536, Bottom: 960}
+	if !pointInRect(point{X: 700, Y: 940}, r) {
+		t.Error("a point inside the taskbar was not detected")
+	}
+	if pointInRect(point{X: 700, Y: 911}, r) {
+		t.Error("a point above the taskbar was treated as inside")
+	}
+	if pointInRect(point{X: 1536, Y: 940}, r) {
+		t.Error("the exclusive right edge was treated as inside")
+	}
+	if !pointInRect(point{X: 0, Y: 912}, r) {
+		t.Error("the inclusive top-left corner was not detected")
 	}
 }
 

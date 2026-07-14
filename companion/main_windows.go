@@ -70,9 +70,12 @@ const (
 	defaultCharset     = 1
 	defaultPitch       = 0
 
-	vkShift = uintptr(0x10)
-	vkMenu  = uintptr(0x12)
-	vkTab   = uintptr(0x09)
+	vkLButton = uintptr(0x01)
+	vkRButton = uintptr(0x02)
+	vkMButton = uintptr(0x04)
+	vkShift   = uintptr(0x10)
+	vkMenu    = uintptr(0x12)
+	vkTab     = uintptr(0x09)
 
 	processQueryLimitedInformation = uint32(0x1000)
 	dwmwaCloaked                   = uint32(14)
@@ -85,6 +88,8 @@ var (
 	dwmapi   = syscall.NewLazyDLL("dwmapi.dll")
 
 	procRegisterClassExW              = user32.NewProc("RegisterClassExW")
+	procEnumWindows                   = user32.NewProc("EnumWindows")
+	procGetCursorPos                  = user32.NewProc("GetCursorPos")
 	procCreateWindowExW               = user32.NewProc("CreateWindowExW")
 	procDefWindowProcW                = user32.NewProc("DefWindowProcW")
 	procDestroyWindow                 = user32.NewProc("DestroyWindow")
@@ -222,6 +227,10 @@ type application struct {
 	manualVisible    bool
 	altTabVisible    bool
 	previewVisible   bool
+	previewHit       bool
+	previewSource    string
+	stickyVisible    bool
+	cursorPos        point
 	previewCache     map[uintptr]bool
 	shiftDown        bool
 	lastShiftRelease uint64
@@ -527,6 +536,7 @@ func (a *application) tick() error {
 	a.pollDoubleShift(focused)
 	a.pollAltTab()
 	a.pollShellPreview()
+	a.pollStickyRelease(focused)
 	if a.manualVisible {
 		if !focused || lastInputTime() != a.lastManualInput {
 			a.manualVisible = false
@@ -540,7 +550,7 @@ func (a *application) tick() error {
 		occluded = a.hasOccludingWindow()
 	}
 
-	desired, reason := visibilityState(a.manualVisible, a.altTabVisible, a.previewVisible, occluded)
+	desired, reason := visibilityState(a.manualVisible, a.altTabVisible, a.previewVisible, a.stickyVisible, occluded)
 	if desired {
 		if err := a.updateGeometryAndBitmap(); err != nil {
 			return err
@@ -572,8 +582,8 @@ func (a *application) pollAltTab() {
 
 // visibilityState decides whether the halo shows and which trigger wins the
 // log line, from strongest to weakest: an explicit gesture, then the shell
-// window-picking surfaces, then occlusion.
-func visibilityState(manual, altTab, preview, occluded bool) (bool, string) {
+// window-picking surfaces, then the taskbar latch, then occlusion.
+func visibilityState(manual, altTab, preview, latched, occluded bool) (bool, string) {
 	switch {
 	case manual:
 		return true, "double-shift"
@@ -581,6 +591,8 @@ func visibilityState(manual, altTab, preview, occluded bool) (bool, string) {
 		return true, "alt-tab"
 	case preview:
 		return true, "shell-preview"
+	case latched:
+		return true, "latched"
 	case occluded:
 		return true, "occluded"
 	default:
@@ -588,45 +600,114 @@ func visibilityState(manual, altTab, preview, occluded bool) (bool, string) {
 	}
 }
 
-// shellPreviewClasses are the explorer.exe windows that display window
-// miniatures: the taskbar thumbnail flyout, Alt+Tab, and Task View. On
-// Windows 11 they share one XAML host class; the other two cover Windows 10.
-var shellPreviewClasses = map[string]bool{
-	"XamlExplorerHostIslandWindow": true,
-	"TaskListThumbnailWnd":         true,
-	"MultitaskingViewFrame":        true,
-}
-
-// pollShellPreview reports whether a shell preview surface is on screen, so
-// the halo also shows on the focused window while the user hovers the
-// taskbar icons. Those surfaces live in z-bands above every application
-// window, so walking upward from the target reaches them, and they stay
-// DWM-cloaked while idle: an uncloaked one is really being displayed.
-func (a *application) pollShellPreview() {
-	active := false
-	for candidate, _, _ := procGetWindow.Call(a.target, uintptr(gwHwndPrev)); candidate != 0; candidate, _, _ = procGetWindow.Call(candidate, uintptr(gwHwndPrev)) {
-		if !a.isShellPreviewWindow(candidate) {
-			continue
-		}
-		if isVisible, _, _ := procIsWindowVisible.Call(candidate); isVisible == 0 || isCloaked(candidate) {
-			continue
-		}
-		active = true
-		break
+// isShellPreviewClass recognizes the explorer.exe windows that display
+// window miniatures: the taskbar thumbnail flyout, Alt+Tab, and Task View.
+// Windows 11 hosts them in XAML islands, suffixed _WASDK once the taskbar
+// moved to the Windows App SDK, whose popups render in WinUI site bridges;
+// the two exact classes cover Windows 10.
+func isShellPreviewClass(class string) bool {
+	if strings.HasPrefix(class, "XamlExplorerHostIslandWindow") {
+		return true
 	}
-	if active && !a.previewVisible {
-		a.logger.Printf("shell preview visible")
-	}
-	a.previewVisible = active
-}
-
-// isShellPreviewWindow caches only the process check: a window class never
-// changes for a given handle, but handles are recycled rarely enough that
-// the explorer.exe verdict can be remembered per handle.
-func (a *application) isShellPreviewWindow(hwnd uintptr) bool {
-	if !shellPreviewClasses[windowClass(hwnd)] {
+	switch class {
+	case "TaskListThumbnailWnd", "MultitaskingViewFrame", "Microsoft.UI.Content.PopupWindowSiteBridge":
+		return true
+	default:
 		return false
 	}
+}
+
+// isTaskbarClass recognizes the taskbar windows themselves: the cursor
+// resting on one of them is the reliable cue that the thumbnail previews
+// may be displayed, independent of how the shell renders them.
+func isTaskbarClass(class string) bool {
+	return class == "Shell_TrayWnd" || class == "Shell_SecondaryTrayWnd"
+}
+
+func pointInRect(p point, r rect) bool {
+	return p.X >= r.Left && p.X < r.Right && p.Y >= r.Top && p.Y < r.Bottom
+}
+
+// shellPreviewEnumProc visits every top-level window and stops at the first
+// preview cue: the cursor over a taskbar, or a displayed shell preview
+// surface. Shell flyouts live in z-bands that a sibling walk from an
+// application window never enters, so the detection must go through
+// EnumWindows, which does list them. The visibility check comes first: it
+// discards most windows before any class lookup.
+var shellPreviewEnumProc = syscall.NewCallback(func(hwnd, _ uintptr) uintptr {
+	app := activeApp
+	if app == nil {
+		return 0
+	}
+	if isVisible, _, _ := procIsWindowVisible.Call(hwnd); isVisible == 0 {
+		return 1
+	}
+	class := windowClass(hwnd)
+	if isTaskbarClass(class) {
+		if r, err := windowRect(hwnd); err == nil && pointInRect(app.cursorPos, r) {
+			app.previewHit = true
+			app.previewSource = "taskbar hover"
+			return 0
+		}
+		return 1
+	}
+	if !isShellPreviewClass(class) || !app.isExplorerWindow(hwnd) || isCloaked(hwnd) {
+		return 1
+	}
+	// The Windows App SDK island parks visible and uncloaked but empty:
+	// only a laid-out surface counts as displayed.
+	if r, err := windowRect(hwnd); err != nil || r.width() <= 2 || r.height() <= 2 {
+		return 1
+	}
+	app.previewHit = true
+	app.previewSource = "flyout"
+	return 0
+})
+
+// pollShellPreview reports whether a preview cue is active, so the halo
+// also shows on the focused window while the user hovers the taskbar.
+func (a *application) pollShellPreview() {
+	a.previewHit = false
+	a.cursorPos = point{X: -2147483648, Y: -2147483648}
+	if result, _, _ := procGetCursorPos.Call(uintptr(unsafe.Pointer(&a.cursorPos))); result == 0 {
+		a.cursorPos = point{X: -2147483648, Y: -2147483648}
+	}
+	procEnumWindows.Call(shellPreviewEnumProc, 0)
+	if a.previewHit && !a.previewVisible {
+		a.logger.Printf("shell preview visible (%s)", a.previewSource)
+	}
+	// A preview cue latches the halo: the thumbnail miniatures hover above
+	// the taskbar rectangle, so reaching them leaves the trigger zone, and
+	// the halo must survive that. Only a click inside the window releases it.
+	if a.previewHit && !a.stickyVisible {
+		a.stickyVisible = true
+		a.logger.Printf("halo latched (%s)", a.previewSource)
+	}
+	a.previewVisible = a.previewHit
+}
+
+// pollStickyRelease drops the latch on a mouse click inside the target
+// window while it is foreground: the user is back in that window and has
+// identified it, the halo has done its job.
+func (a *application) pollStickyRelease(focused bool) {
+	if !a.stickyVisible || !focused {
+		return
+	}
+	if !asyncKeyDown(vkLButton) && !asyncKeyDown(vkRButton) && !asyncKeyDown(vkMButton) {
+		return
+	}
+	r, err := windowRect(a.target)
+	if err != nil || !pointInRect(a.cursorPos, r) {
+		return
+	}
+	a.stickyVisible = false
+	a.logger.Printf("halo released by a click inside the window")
+}
+
+// isExplorerWindow caches the process verdict per handle: opening the
+// owning process on every 25ms tick would be wasteful, and a handle keeps
+// its owner for its whole life.
+func (a *application) isExplorerWindow(hwnd uintptr) bool {
 	if verdict, known := a.previewCache[hwnd]; known {
 		return verdict
 	}
