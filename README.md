@@ -2,8 +2,9 @@
 
 Workspace Halo makes Visual Studio Code workspaces immediately recognizable on
 Windows 11. It draws a configurable border, the workspace name, and its logo
-over the VS Code window when Windows shows Alt+Tab, when the window is covered,
-or when you press Shift twice.
+over the VS Code window when Windows shows Alt+Tab, the taskbar thumbnail
+previews, or Task View, when the window is covered, or when you press Shift
+twice.
 
 The overlay is part of the tracked VS Code window, so Windows includes it in the
 window's Alt+Tab thumbnail. It never floats above unrelated applications.
@@ -12,6 +13,9 @@ window's Alt+Tab thumbnail. It never floats above unrelated applications.
 
 - Shows the halo as soon as Alt+Tab is pressed, even when the VS Code window is
   fully visible on another monitor.
+- Shows the halo while the taskbar thumbnail previews or Task View are
+  displayed, including on the focused window, so every miniature carries its
+  halo.
 - Shows the halo while an unfocused VS Code window is even partially obscured.
 - Shows the halo on demand with a double press and release of Shift.
 - Hides an on-demand halo on the next mouse or keyboard interaction.
@@ -71,6 +75,19 @@ For a multi-root workspace, only the root folder whose VS Code folder name
 exactly matches the workspace name is inspected. Other root folders are ignored.
 If the matching root or exact PNG file is absent, Workspace Halo remains
 visually inactive and does not start its native host.
+
+When no root folder name matches the workspace name (for example a saved
+workspace `my-tools.code-workspace` whose only root folder is named `tools`),
+list the accepted root folder names in the workspace settings:
+
+```json
+"workspaceHalo.rootSynonyms": ["tools"]
+```
+
+A root folder whose name equals the workspace name still wins over a synonym,
+and the first synonym match in root order is used otherwise. The logo file
+keeps the workspace name: `.vscode/my-tools.logo.png` inside the matched root
+folder.
 
 If several `*.logo.png` files exist in the selected `.vscode` directory, the
 exact workspace logo is still used. A warning is written to the developer
