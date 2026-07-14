@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.0.8
+
+- Latch a taskbar-triggered halo: moving from the taskbar up into the
+  thumbnail miniatures no longer drops it. The halo stays until the next
+  mouse click inside that window.
+
+## 0.0.7
+
+- Show the halo whenever the mouse is over the taskbar: the reliable cue
+  that the thumbnail previews may be displayed, independent of how the
+  shell renders them. The flyout-window detection stays as a secondary cue.
+
+## 0.0.6
+
+- Fix the shell preview detection: the flyouts live in z-bands that a
+  sibling walk from an application window never enters, so the host now
+  scans them with `EnumWindows`, recognizes the Windows App SDK taskbar
+  classes (`XamlExplorerHostIslandWindow_WASDK`, WinUI popup site bridges),
+  and ignores surfaces parked with an empty rectangle.
+
 ## 0.0.5
 
 - Show the halo while a shell window-picking surface is displayed: the
