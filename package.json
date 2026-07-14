@@ -2,7 +2,7 @@
   "name": "workspace-halo",
   "displayName": "Workspace Halo",
   "description": "Identify VS Code workspace windows with a configurable Alt+Tab halo.",
-  "version": "0.0.3",
+  "version": "0.0.5",
   "publisher": "vonc",
   "license": "UNLICENSED",
   "icon": "images/logo-workspace-halo.png",
@@ -38,6 +38,15 @@
     "configuration": {
       "title": "Workspace Halo",
       "properties": {
+        "workspaceHalo.rootSynonyms": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "window",
+          "description": "Extra root folder names accepted as the workspace root when no root folder name matches the workspace name. The logo file keeps the workspace name."
+        },
         "workspaceHalo.color": {
           "type": "string",
           "default": "#ff2d55",
