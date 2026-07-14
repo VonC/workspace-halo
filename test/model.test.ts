@@ -5,6 +5,7 @@ import {
   optionalWorkspaceScopedValue,
   resolveSharedColor,
   selectLogo,
+  selectRootName,
   workspaceScopedValue
 } from "../src/model";
 
@@ -36,6 +37,17 @@ test("only the exact workspace-named logo activates", () => {
   assert.equal(selection.exactLogo, "my-project.logo.png");
   assert.deepEqual(selection.logoFiles, ["my-project.logo.png", "other.logo.png"]);
   assert.equal(selectLogo("My-Project", ["my-project.logo.png"]).exactLogo, undefined);
+});
+
+test("a root synonym is accepted when no folder name matches", () => {
+  assert.equal(selectRootName("setupsenv", ["custom", "senv"], ["senv"]), "senv");
+  assert.equal(selectRootName("setupsenv", ["custom", "senv"], []), undefined);
+  assert.equal(selectRootName("setupsenv", ["custom", "senv"], ["other"]), undefined);
+  assert.equal(
+    selectRootName("my-project", ["alias", "my-project"], ["alias"]),
+    "my-project"
+  );
+  assert.equal(selectRootName("my-project", ["a", "b"], ["b", "a"]), "a");
 });
 
 test("workspace Peacock color takes precedence over Workspace Halo color", () => {

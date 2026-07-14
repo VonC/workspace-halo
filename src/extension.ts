@@ -6,6 +6,7 @@ import {
   optionalWorkspaceScopedValue,
   resolveSharedColor,
   selectLogo,
+  selectRootName,
   workspaceScopedValue
 } from "./model";
 
@@ -138,7 +139,16 @@ class WorkspaceHaloController implements vscode.Disposable {
       return undefined;
     }
 
-    const root = workspaceFolders.find((folder) => folder.name === workspaceName);
+    const inspectedSynonyms = vscode.workspace
+      .getConfiguration("workspaceHalo")
+      .inspect<readonly string[]>("rootSynonyms");
+    const rootSynonyms = optionalWorkspaceScopedValue(inspectedSynonyms) ?? [];
+    const rootName = selectRootName(
+      workspaceName,
+      workspaceFolders.map((folder) => folder.name),
+      rootSynonyms
+    );
+    const root = workspaceFolders.find((folder) => folder.name === rootName);
     if (root === undefined || root.uri.scheme !== "file") {
       return undefined;
     }

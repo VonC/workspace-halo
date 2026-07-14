@@ -36,6 +36,18 @@ export function optionalWorkspaceScopedValue<T>(
   return inspected?.workspaceFolderValue ?? inspected?.workspaceValue;
 }
 
+export function selectRootName(
+  workspaceName: string,
+  folderNames: readonly string[],
+  rootSynonyms: readonly string[]
+): string | undefined {
+  const exact = folderNames.find((name) => name === workspaceName);
+  if (exact !== undefined) {
+    return exact;
+  }
+  return folderNames.find((name) => rootSynonyms.includes(name));
+}
+
 export function selectLogo(
   workspaceName: string,
   directoryEntries: readonly string[]
