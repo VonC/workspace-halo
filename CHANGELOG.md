@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.9
+
+- Release the latched halo on any keystroke while its window is focused,
+  so a keyboard-only return into the window clears the halo without a
+  mouse click.
+
 ## 0.0.8
 
 - Latch a taskbar-triggered halo: moving from the taskbar up into the
