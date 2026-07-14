@@ -686,11 +686,17 @@ func (a *application) pollShellPreview() {
 	a.previewVisible = a.previewHit
 }
 
-// pollStickyRelease drops the latch on a mouse click inside the target
-// window while it is foreground: the user is back in that window and has
-// identified it, the halo has done its job.
+// pollStickyRelease drops the latch when the user is back at work in the
+// target window: a mouse click inside it, or any keystroke while it is
+// foreground. Either way the window is identified, the halo has done its
+// job.
 func (a *application) pollStickyRelease(focused bool) {
 	if !a.stickyVisible || !focused {
+		return
+	}
+	if anyKeyPressed() {
+		a.stickyVisible = false
+		a.logger.Printf("halo released by a keystroke")
 		return
 	}
 	if !asyncKeyDown(vkLButton) && !asyncKeyDown(vkRButton) && !asyncKeyDown(vkMButton) {
@@ -702,6 +708,19 @@ func (a *application) pollStickyRelease(focused bool) {
 	}
 	a.stickyVisible = false
 	a.logger.Printf("halo released by a click inside the window")
+}
+
+// anyKeyPressed reports whether any keyboard key is currently down. The
+// scan starts after the mouse-button range (0x01-0x06): a click releases
+// the latch only when it lands inside the window, while a keystroke
+// releases it wherever the cursor is.
+func anyKeyPressed() bool {
+	for key := uintptr(0x08); key <= 0xFE; key++ {
+		if asyncKeyDown(key) {
+			return true
+		}
+	}
+	return false
 }
 
 // isExplorerWindow caches the process verdict per handle: opening the
