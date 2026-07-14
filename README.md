@@ -13,9 +13,10 @@ window's Alt+Tab thumbnail. It never floats above unrelated applications.
 
 - Shows the halo as soon as Alt+Tab is pressed, even when the VS Code window is
   fully visible on another monitor.
-- Shows the halo while the taskbar thumbnail previews or Task View are
-  displayed, including on the focused window, so every miniature carries its
-  halo.
+- Shows the halo when the mouse reaches the taskbar (where the thumbnail
+  previews appear), including on the focused window, so every miniature
+  carries its halo. That halo then stays until the next mouse click inside
+  its window, so moving up into the miniatures does not drop it.
 - Shows the halo while an unfocused VS Code window is even partially obscured.
 - Shows the halo on demand with a double press and release of Shift.
 - Hides an on-demand halo on the next mouse or keyboard interaction.
