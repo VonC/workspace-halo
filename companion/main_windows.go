@@ -221,6 +221,8 @@ type application struct {
 	visibilityReason string
 	manualVisible    bool
 	altTabVisible    bool
+	previewVisible   bool
+	previewCache     map[uintptr]bool
 	shiftDown        bool
 	lastShiftRelease uint64
 	lastManualInput  uint32
@@ -251,7 +253,7 @@ func main() {
 		fatalf("select target window: %v", err)
 	}
 
-	app := &application{cfg: cfg, target: target, logger: logger, logFile: logFile}
+	app := &application{cfg: cfg, target: target, logger: logger, logFile: logFile, previewCache: map[uintptr]bool{}}
 	activeApp = app
 	if err := app.createOverlay(); err != nil {
 		fatalf("create overlay: %v", err)
@@ -524,6 +526,7 @@ func (a *application) tick() error {
 	focused := foregroundWindow() == a.target
 	a.pollDoubleShift(focused)
 	a.pollAltTab()
+	a.pollShellPreview()
 	if a.manualVisible {
 		if !focused || lastInputTime() != a.lastManualInput {
 			a.manualVisible = false
@@ -537,15 +540,7 @@ func (a *application) tick() error {
 		occluded = a.hasOccludingWindow()
 	}
 
-	desired := a.manualVisible || a.altTabVisible || occluded
-	reason := "hidden"
-	if a.manualVisible {
-		reason = "double-shift"
-	} else if a.altTabVisible {
-		reason = "alt-tab"
-	} else if occluded {
-		reason = "occluded"
-	}
+	desired, reason := visibilityState(a.manualVisible, a.altTabVisible, a.previewVisible, occluded)
 	if desired {
 		if err := a.updateGeometryAndBitmap(); err != nil {
 			return err
@@ -573,6 +568,72 @@ func (a *application) pollAltTab() {
 	if !altDown {
 		a.altTabVisible = false
 	}
+}
+
+// visibilityState decides whether the halo shows and which trigger wins the
+// log line, from strongest to weakest: an explicit gesture, then the shell
+// window-picking surfaces, then occlusion.
+func visibilityState(manual, altTab, preview, occluded bool) (bool, string) {
+	switch {
+	case manual:
+		return true, "double-shift"
+	case altTab:
+		return true, "alt-tab"
+	case preview:
+		return true, "shell-preview"
+	case occluded:
+		return true, "occluded"
+	default:
+		return false, "hidden"
+	}
+}
+
+// shellPreviewClasses are the explorer.exe windows that display window
+// miniatures: the taskbar thumbnail flyout, Alt+Tab, and Task View. On
+// Windows 11 they share one XAML host class; the other two cover Windows 10.
+var shellPreviewClasses = map[string]bool{
+	"XamlExplorerHostIslandWindow": true,
+	"TaskListThumbnailWnd":         true,
+	"MultitaskingViewFrame":        true,
+}
+
+// pollShellPreview reports whether a shell preview surface is on screen, so
+// the halo also shows on the focused window while the user hovers the
+// taskbar icons. Those surfaces live in z-bands above every application
+// window, so walking upward from the target reaches them, and they stay
+// DWM-cloaked while idle: an uncloaked one is really being displayed.
+func (a *application) pollShellPreview() {
+	active := false
+	for candidate, _, _ := procGetWindow.Call(a.target, uintptr(gwHwndPrev)); candidate != 0; candidate, _, _ = procGetWindow.Call(candidate, uintptr(gwHwndPrev)) {
+		if !a.isShellPreviewWindow(candidate) {
+			continue
+		}
+		if isVisible, _, _ := procIsWindowVisible.Call(candidate); isVisible == 0 || isCloaked(candidate) {
+			continue
+		}
+		active = true
+		break
+	}
+	if active && !a.previewVisible {
+		a.logger.Printf("shell preview visible")
+	}
+	a.previewVisible = active
+}
+
+// isShellPreviewWindow caches only the process check: a window class never
+// changes for a given handle, but handles are recycled rarely enough that
+// the explorer.exe verdict can be remembered per handle.
+func (a *application) isShellPreviewWindow(hwnd uintptr) bool {
+	if !shellPreviewClasses[windowClass(hwnd)] {
+		return false
+	}
+	if verdict, known := a.previewCache[hwnd]; known {
+		return verdict
+	}
+	path, err := processImagePath(hwnd)
+	verdict := err == nil && strings.EqualFold(filepath.Base(path), "explorer.exe")
+	a.previewCache[hwnd] = verdict
+	return verdict
 }
 
 func (a *application) pollDoubleShift(focused bool) {

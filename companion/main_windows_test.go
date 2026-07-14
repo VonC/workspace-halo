@@ -65,6 +65,45 @@ func TestLogoUpscalesToOneThirdHeight(t *testing.T) {
 	}
 }
 
+func TestVisibilityStatePrecedence(t *testing.T) {
+	tests := []struct {
+		manual, altTab, preview, occluded bool
+		wantVisible                       bool
+		wantReason                        string
+	}{
+		{true, true, true, true, true, "double-shift"},
+		{false, true, true, true, true, "alt-tab"},
+		{false, false, true, true, true, "shell-preview"},
+		{false, false, false, true, true, "occluded"},
+		{false, false, false, false, false, "hidden"},
+	}
+	for _, test := range tests {
+		visible, reason := visibilityState(test.manual, test.altTab, test.preview, test.occluded)
+		if visible != test.wantVisible || reason != test.wantReason {
+			t.Errorf(
+				"visibilityState(%t, %t, %t, %t) = (%t, %q), want (%t, %q)",
+				test.manual, test.altTab, test.preview, test.occluded,
+				visible, reason, test.wantVisible, test.wantReason,
+			)
+		}
+	}
+}
+
+func TestShellPreviewClassesCoverBothShells(t *testing.T) {
+	for _, class := range []string{
+		"XamlExplorerHostIslandWindow",
+		"TaskListThumbnailWnd",
+		"MultitaskingViewFrame",
+	} {
+		if !shellPreviewClasses[class] {
+			t.Errorf("shell preview class %q is not recognized", class)
+		}
+	}
+	if shellPreviewClasses["Chrome_WidgetWin_1"] {
+		t.Error("an application window class was treated as a shell preview")
+	}
+}
+
 func TestRectanglesIntersect(t *testing.T) {
 	base := rect{Left: 0, Top: 0, Right: 100, Bottom: 100}
 	if !rectanglesIntersect(base, rect{Left: 99, Top: 99, Right: 120, Bottom: 120}) {
