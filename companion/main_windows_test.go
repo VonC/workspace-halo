@@ -161,29 +161,85 @@ func TestLogoUpscalesToOneThirdHeight(t *testing.T) {
 
 func TestVisibilityStatePrecedence(t *testing.T) {
 	tests := []struct {
-		manual, altTab, preview, latched, occluded bool
-		wantVisible                                bool
-		wantReason                                 string
+		manual, minimized, altTab, preview, occluded bool
+		wantVisible                                  bool
+		wantReason                                   string
 	}{
 		{true, true, true, true, true, true, "double-shift"},
 		{false, true, true, true, true, true, "alt-tab"},
-		{false, false, true, true, true, true, "shell-preview"},
-		{false, false, false, true, true, true, "latched"},
+		{false, true, false, true, true, true, "shell-preview"},
+		{false, true, false, false, true, true, "minimized"},
 		{false, false, false, false, true, true, "occluded"},
 		{false, false, false, false, false, false, "hidden"},
 	}
 	for _, test := range tests {
-		visible, reason := visibilityState(test.manual, test.altTab, test.preview, test.latched, test.occluded)
+		visible, reason := visibilityState(test.manual, test.minimized, test.altTab, test.preview, test.occluded)
 		if visible != test.wantVisible || reason != test.wantReason {
 			t.Errorf(
 				"visibilityState(%t, %t, %t, %t, %t) = (%t, %q), want (%t, %q)",
-				test.manual, test.altTab, test.preview, test.latched, test.occluded,
+				test.manual, test.minimized, test.altTab, test.preview, test.occluded,
 				visible, reason, test.wantVisible, test.wantReason,
 			)
 		}
 	}
 }
 
+func TestMinimizeTransitionTargetsOnlyTheTrackedTopLevelWindow(t *testing.T) {
+	const target = uintptr(0x1234)
+	tests := []struct {
+		name              string
+		event             uint32
+		hwnd              uintptr
+		idObject, idChild int32
+		wantMatched       bool
+		wantStarting      bool
+	}{
+		{"start", eventSystemMinimizeStart, target, objidWindow, childidSelf, true, true},
+		{"end", eventSystemMinimizeEnd, target, objidWindow, childidSelf, true, false},
+		{"other window", eventSystemMinimizeStart, 0x5678, objidWindow, childidSelf, false, false},
+		{"child object", eventSystemMinimizeStart, target, objidWindow, 1, false, false},
+		{"other event", 0x0003, target, objidWindow, childidSelf, false, false},
+	}
+	for _, test := range tests {
+		matched, starting := minimizeTransition(test.event, test.hwnd, target, test.idObject, test.idChild)
+		if matched != test.wantMatched || starting != test.wantStarting {
+			t.Errorf(
+				"%s: minimizeTransition() = (%t, %t), want (%t, %t)",
+				test.name, matched, starting, test.wantMatched, test.wantStarting,
+			)
+		}
+	}
+}
+
+func TestMinimizeEventTransitionPrimesThenAcceptsTheReplay(t *testing.T) {
+	phase, action := minimizeEventTransition(minimizeIdle, true)
+	if phase != minimizePriming || action != minimizePrime {
+		t.Fatalf("initial start = (%v, %v), want priming/prime", phase, action)
+	}
+
+	phase, action = minimizeEventTransition(phase, false)
+	if phase != minimizePriming || action != minimizeNoAction {
+		t.Fatalf("internal restore = (%v, %v), want priming/no-action", phase, action)
+	}
+
+	phase = minimizeReplaying
+	phase, action = minimizeEventTransition(phase, true)
+	if phase != minimizeCommitted || action != minimizeAllowReplay {
+		t.Fatalf("replayed start = (%v, %v), want committed/allow-replay", phase, action)
+	}
+
+	phase, action = minimizeEventTransition(phase, false)
+	if phase != minimizeIdle || action != minimizeRestored {
+		t.Fatalf("real restore = (%v, %v), want idle/restored", phase, action)
+	}
+}
+
+func TestDuplicateMinimizeStartDoesNotRestartPriming(t *testing.T) {
+	phase, action := minimizeEventTransition(minimizePriming, true)
+	if phase != minimizePriming || action != minimizeNoAction {
+		t.Fatalf("duplicate start = (%v, %v), want priming/no-action", phase, action)
+	}
+}
 func TestShellPreviewClassRecognition(t *testing.T) {
 	for _, class := range []string{
 		"XamlExplorerHostIslandWindow",
@@ -245,6 +301,21 @@ func TestRectanglesIntersect(t *testing.T) {
 	}
 }
 
+func TestVisibleFrameBoundsPreventAdjacentMonitorFalseOverlap(t *testing.T) {
+	// Captured from two maximized VS Code windows on vertically adjacent
+	// monitors. GetWindowRect includes resize borders that cross the boundary.
+	rawUpper := rect{Left: 955, Top: -1214, Right: 2893, Bottom: 4}
+	rawLower := rect{Left: -7, Top: -7, Right: 1543, Bottom: 919}
+	if !rectanglesIntersect(rawUpper, rawLower) {
+		t.Fatal("fixture no longer demonstrates the invisible-border overlap")
+	}
+
+	visibleUpper := rect{Left: 964, Top: -1205, Right: 2884, Bottom: -5}
+	visibleLower := rect{Left: 0, Top: 0, Right: 1920, Bottom: 1140}
+	if rectanglesIntersect(visibleUpper, visibleLower) {
+		t.Error("DWM visible frame bounds on adjacent monitors were treated as overlapping")
+	}
+}
 func TestPillBackgroundColorTintsTheContrastPole(t *testing.T) {
 	tests := []struct {
 		name      string

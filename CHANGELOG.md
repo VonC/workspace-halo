@@ -1,7 +1,43 @@
 # Changelog
 
+## 0.0.18
+
+- Use DWM extended-frame bounds for occlusion checks so invisible resize borders
+  from maximized windows on adjacent monitors do not count as real overlap.
+- Let fully exposed VS Code windows hide their halos immediately after Alt+Tab,
+  while preserving halos for windows with genuine visible overlap.
+
+## 0.0.17
+
+- Intercept the first minimize transition, restore it without activation, compose
+  and flush the child halo, then replay minimization after a short settling
+  interval so DWM captures the already-visible halo.
+- Remove direct GDI painting into the VS Code surface, which could leave a halo
+  visible after the window was restored and fully exposed.
+
+## 0.0.16
+
+- Composite the halo directly into the tracked VS Code window at minimize
+  start, making it part of the DWM snapshot used by minimized Alt+Tab and
+  taskbar thumbnails. This replaces reliance on child-overlay composition,
+  which Windows 11 omits from minimized thumbnails on affected systems.
+- Keep the child overlay for normal visible-window policy and explicit
+  double-Shift display.
+
+## 0.0.15
+
+- Keep the child overlay surface composed while its halo is hidden by using
+  `DWMWA_CLOAK` instead of `SW_HIDE`. Uncloaking and flushing that retained
+  surface lets minimized Alt+Tab and taskbar thumbnails display the halo.
+
 ## 0.0.14
 
+- Paint the halo on Windows' minimize-start event, before DWM captures the
+  minimized window surface, so Alt+Tab and taskbar miniatures retain it.
+  Minimized windows then keep the halo active.
+- Remove the focus-loss and preview latch: a fully visible, non-minimized
+  window hides its halo as soon as no Alt+Tab, taskbar-preview, or
+  double-Shift trigger is active.
 - Bind each native host through a two-phase focus handshake with its launching
   VS Code extension window. The host rechecks the proposed foreground HWND at
   confirmation time and rejects stale proposals, preventing rapid window
