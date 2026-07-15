@@ -54,9 +54,18 @@ tree.
 
 The equivalent command-line installation is:
 
-```powershell
-code --install-extension .\workspace-halo-win32-x64.vsix
+```bat
+"%PRGS%\vscodes\current\bin\code.cmd" --install-extension ".\workspace-halo-win32-x64.vsix" --force
 ```
+
+From the source tree, `install.bat` runs that command against the packaged VSIX:
+
+```bat
+install.bat
+```
+
+After `senv.bat` has initialized the project command prompt, the `i` doskey
+alias runs `install.bat` as well.
 
 The included native executable is currently unsigned. A corporate release
 should Authenticode-sign `workspace-halo-host.exe` before packaging if endpoint
@@ -146,10 +155,14 @@ by a particular top-level window. Workspace Halo therefore has two small parts:
 - The TypeScript extension uses the VS Code API to identify its own workspace,
   select the exact logo, read workspace-scoped settings, and launch one host for
   that VS Code window.
-- The bundled Go/Win32 host binds to that focused stable VS Code window, detects
-  Alt+Tab, double-Shift, focus, and geometric occlusion, and renders a child
-  overlay. Making it a child is what lets Windows include the halo in the
-  Alt+Tab thumbnail without placing it over other applications.
+- The extension and bundled Go/Win32 host use a two-phase focus handshake to
+  select the native window. The host proposes the foreground `Code.exe` HWND;
+  the extension confirms only while its own window is still focused, and the
+  host rechecks the same HWND before binding. A stale proposal is rejected and
+  retried on a fresh focus signal instead of attaching the wrong workspace.
+- Once bound, the host detects Alt+Tab, double-Shift, focus, and geometric
+  occlusion, and renders a child overlay. Making it a child is what lets Windows
+  include the halo in Alt+Tab without placing it over unrelated applications.
 
 The host is a build artifact, not a separate user-installed component. Closing
 the VS Code window or deactivating the extension stops its host process.
@@ -170,7 +183,7 @@ If no halo appears:
 - Confirm the workspace name and matching root-folder name are identical.
 - Confirm `.vscode/<workspace name>.logo.png` exists with matching case.
 - Confirm the image is a readable PNG.
-- Focus the intended stable VS Code window after activation so its host can bind.
+- Focus the intended stable VS Code window so its host can complete the handshake.
 - Check the Workspace Halo output channel for startup or binding errors.
 
 ## Build and package

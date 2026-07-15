@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.0.14
+
+- Bind each native host through a two-phase focus handshake with its launching
+  VS Code extension window. The host rechecks the proposed foreground HWND at
+  confirmation time and rejects stale proposals, preventing rapid window
+  switches and session restoration from attaching one workspace's halo to
+  another VS Code window.
+- Add `install.bat` to force-install the packaged VSIX with the project's
+  `%PRGS%\vscodes\current\bin\code.cmd`, plus the `i` project environment
+  alias.
+
 ## 0.0.13
 
 - Re-arm the latch when the window loses the focus: a window the user just
