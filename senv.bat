@@ -13,6 +13,7 @@ REM Usage:
 REM First script to be called to setup the environment for the project.
 REM   senv.bat     apply the environment (skipped when already applied)
 REM   fsenv        clear the guard and apply it again (doskey alias)
+REM   i             run install.bat (doskey alias)
 REM
 REM Node: selected with 'switchnode 22' when that launcher is on PATH
 REM (it picks the latest node22 in %PRGS%\nodes). Without switchnode, any
@@ -31,14 +32,20 @@ for %%i in ("%~dp0") do SET "PRJ_DIR=%%~fi"
 set "PRJ_DIR=%PRJ_DIR:~0,-1%"
 for %%i in ("%PRJ_DIR%") do SET "PRJ_DIR_NAME=%%~nxi"
 
-REM fsenv alias: clear the guard and force this project senv to run again.
-REM Defined before the guard check on purpose, so even a run skipped by the
-REM guard (fresh VSCode console inheriting the variable) installs the alias.
+REM Project aliases are defined before the guard check on purpose, so even a
+REM run skipped by the guard (fresh VSCode console inheriting the variable)
+REM installs them. fsenv clears the guard and forces this senv to run again.
 doskey fsenv=set "NO_MORE_SENV_%PRJ_DIR_NAME%=" ^& "%~f0" force $*
+doskey i=call "%PRJ_DIR%\install.bat" $*
 
 REM The guard variable is inherited by child processes (a VSCode terminal
 REM opened from an activated shell), while PATH changes may have been undone
-REM there: say so instead of exiting silently. Recovery: run 'fsenv'.
+REM there: say so instead of exiting silently. Recovery in a fresh VSCode
+REM terminal, in this order (the global senv resets PATH before rebuilding it,
+REM so it must run first):
+REM   hsenv         always run %%HOME%%\bin\senv.bat via %%USERPROFILE%%\senv.bat
+REM   .\senv.bat    installs the project fsenv alias even when the guard skips
+REM   fsenv         clears the project guard and re-runs this senv.bat
 if defined NO_MORE_SENV_%PRJ_DIR_NAME% (
   echo INFO: senv already applied for '%PRJ_DIR_NAME%' in this environment, skipping
   exit /b 0
