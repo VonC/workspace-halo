@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.0.13
+
+- Re-arm the latch when the window loses the focus: a window the user just
+  left keeps its halo until the next click inside it.
+- Keep the pill and the name at least `workspaceHalo.pillMargin` pixels
+  (default 50) away from the left and right window edges; the font fitting
+  accounts for the pill cap overhang.
+- Default the pill opacity to 100 (solid), still configurable.
+- Alternate opaque black segments in the border, `workspaceHalo.borderSegment`
+  pixels long (default 50); the black runs are painted, never transparent,
+  and 0 restores the continuous `borderMotif` rendering.
+
+## 0.0.12
+
+- Tint the pill with the name color: one eighth of the text color mixed
+  into its higher-contrast pole, so the pill visibly carries the hue. The
+  pure pole stays as the fallback when the tint would drop the contrast
+  under the 3:1 WCAG large-text minimum.
+
+## 0.0.11
+
+- Hug the pill to the ink of the name: trim the font's internal leading,
+  keep only a sliver below the descent, and shrink the horizontal pad. The
+  pill no longer inflates from the text cell height.
+- Align the black-or-white crossover on the exact WCAG break-even
+  luminance.
+
+## 0.0.10
+
+- Draw a rounded pill behind the workspace name, black or white by the WCAG
+  contrast computation against the name color, at a configurable opacity
+  (`workspaceHalo.namePill`, `workspaceHalo.pillOpacity`, default 80). The
+  color-keyed overlay has no alpha blending, so the opacity is rendered as
+  an ordered dither.
+
 ## 0.0.9
 
 - Release the latched halo on any keystroke while its window is focused,

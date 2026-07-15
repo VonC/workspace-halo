@@ -2,7 +2,7 @@
   "name": "workspace-halo",
   "displayName": "Workspace Halo",
   "description": "Identify VS Code workspace windows with a configurable Alt+Tab halo.",
-  "version": "0.0.9",
+  "version": "0.0.13",
   "publisher": "vonc",
   "license": "UNLICENSED",
   "icon": "images/logo-workspace-halo.png",
@@ -93,6 +93,34 @@
           "default": true,
           "scope": "resource",
           "description": "Draw an automatic dark shadow behind the workspace name."
+        },
+        "workspaceHalo.namePill": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "Draw a rounded pill behind the workspace name, tinted from the name color toward its higher-contrast pole (white or black by WCAG luminance)."
+        },
+        "workspaceHalo.pillOpacity": {
+          "type": "integer",
+          "default": 100,
+          "minimum": 0,
+          "maximum": 100,
+          "scope": "resource",
+          "description": "Pill opacity percentage, rendered as an ordered dither in the color-keyed overlay."
+        },
+        "workspaceHalo.pillMargin": {
+          "type": "integer",
+          "default": 50,
+          "minimum": 0,
+          "scope": "resource",
+          "description": "Minimal left and right margin, in pixels, kept between the window edges and the pill with its name."
+        },
+        "workspaceHalo.borderSegment": {
+          "type": "integer",
+          "default": 50,
+          "minimum": 0,
+          "scope": "resource",
+          "description": "Length in pixels of the alternating opaque black segments of the border. 0 draws the continuous borderMotif instead."
         }
       }
     }
