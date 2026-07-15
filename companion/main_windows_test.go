@@ -3,11 +3,104 @@
 package main
 
 import (
+	"bytes"
+	"errors"
 	"image"
 	"image/color"
+	"io"
+	"log"
 	"math"
+	"strings"
 	"testing"
 )
+
+func TestFocusHandshakeRejectsWindowSwitchBeforeConfirmation(t *testing.T) {
+	foregrounds := []uintptr{0xA, 0xB, 0xB, 0xB}
+	probe := func() (uintptr, error) {
+		if len(foregrounds) == 0 {
+			t.Fatal("foreground probe called too many times")
+		}
+		target := foregrounds[0]
+		foregrounds = foregrounds[1:]
+		return target, nil
+	}
+	var output bytes.Buffer
+	target, err := acquireTargetByFocusHandshake(
+		strings.NewReader("focus 1\nconfirm 1\nfocus 2\nconfirm 2\n"),
+		&output,
+		probe,
+		log.New(io.Discard, "", 0),
+	)
+	if err != nil {
+		t.Fatalf("focus handshake: %v", err)
+	}
+	if target != 0xB {
+		t.Fatalf("bound target = 0x%X, want the freshly confirmed 0xB", target)
+	}
+	transcript := output.String()
+	for _, message := range []string{
+		"workspace-halo-candidate 1",
+		"workspace-halo-rejected 1",
+		"workspace-halo-candidate 2",
+		"workspace-halo-bound 2",
+	} {
+		if !strings.Contains(transcript, message) {
+			t.Errorf("protocol transcript %q does not contain %q", transcript, message)
+		}
+	}
+}
+
+func TestFocusHandshakeIgnoresConfirmationAfterBlur(t *testing.T) {
+	foregrounds := []uintptr{0xA, 0xB, 0xB}
+	probe := func() (uintptr, error) {
+		target := foregrounds[0]
+		foregrounds = foregrounds[1:]
+		return target, nil
+	}
+	var output bytes.Buffer
+	target, err := acquireTargetByFocusHandshake(
+		strings.NewReader("focus 1\nblur 2\nconfirm 1\nfocus 3\nconfirm 3\n"),
+		&output,
+		probe,
+		log.New(io.Discard, "", 0),
+	)
+	if err != nil {
+		t.Fatalf("focus handshake: %v", err)
+	}
+	if target != 0xB {
+		t.Fatalf("bound target = 0x%X, want 0xB after the fresh focus token", target)
+	}
+	if strings.Contains(output.String(), "workspace-halo-bound 1") {
+		t.Fatalf("stale token was bound: %q", output.String())
+	}
+}
+
+func TestFocusHandshakeFailsClosedWhenForegroundIsNotVSCode(t *testing.T) {
+	calls := 0
+	probe := func() (uintptr, error) {
+		calls++
+		if calls == 1 {
+			return 0, errors.New("foreground is not Code.exe")
+		}
+		return 0xA, nil
+	}
+	var output bytes.Buffer
+	target, err := acquireTargetByFocusHandshake(
+		strings.NewReader("focus 1\nfocus 2\nconfirm 2\n"),
+		&output,
+		probe,
+		log.New(io.Discard, "", 0),
+	)
+	if err != nil {
+		t.Fatalf("focus handshake: %v", err)
+	}
+	if target != 0xA {
+		t.Fatalf("bound target = 0x%X, want 0xA", target)
+	}
+	if !strings.Contains(output.String(), "workspace-halo-rejected 1") {
+		t.Fatalf("invalid foreground was not rejected: %q", output.String())
+	}
+}
 
 func TestParseColor(t *testing.T) {
 	tests := []struct {

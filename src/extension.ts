@@ -36,6 +36,10 @@ class WorkspaceHaloController implements vscode.Disposable {
   private readonly output = vscode.window.createOutputChannel("Workspace Halo", { log: true });
   private readonly disposables: vscode.Disposable[] = [];
   private host: ChildProcess | undefined;
+  private hostReady = false;
+  private hostBound = false;
+  private focusToken = 0;
+  private bindingRetryTimer: NodeJS.Timeout | undefined;
   private registration: Registration | undefined;
   private refreshTimer: NodeJS.Timeout | undefined;
   private refreshGeneration = 0;
@@ -66,6 +70,7 @@ class WorkspaceHaloController implements vscode.Disposable {
         }
       }),
       vscode.window.onDidChangeWindowState((state) => {
+        this.signalWindowState(state.focused);
         if (state.focused) {
           this.scheduleRefresh(0);
         }
@@ -80,6 +85,10 @@ class WorkspaceHaloController implements vscode.Disposable {
     if (this.refreshTimer !== undefined) {
       clearTimeout(this.refreshTimer);
       this.refreshTimer = undefined;
+    }
+    if (this.bindingRetryTimer !== undefined) {
+      clearTimeout(this.bindingRetryTimer);
+      this.bindingRetryTimer = undefined;
     }
     for (const disposable of this.disposables) {
       disposable.dispose();
@@ -253,7 +262,7 @@ class WorkspaceHaloController implements vscode.Disposable {
       "--pill-margin", String(registration.settings.pillMargin),
       "--border-segment", String(registration.settings.borderSegment),
       "--log", logPath,
-      "--wait-for-vscode", "5s"
+      "--focus-handshake"
     ];
     if (registration.warning !== undefined) {
       args.push("--startup-warning", registration.warning);
@@ -265,10 +274,12 @@ class WorkspaceHaloController implements vscode.Disposable {
     this.output.info(`Native host log: ${logPath}`);
     const child = spawn(hostPath, args, {
       cwd: registration.root.uri.fsPath,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true
     });
     this.host = child;
+    this.hostReady = false;
+    this.hostBound = false;
     this.output.info(`Native host started (pid=${String(child.pid)}).`);
     this.pipeHostOutput(child);
     child.once("error", (error) => {
@@ -279,6 +290,8 @@ class WorkspaceHaloController implements vscode.Disposable {
         return;
       }
       this.host = undefined;
+      this.hostReady = false;
+      this.hostBound = false;
       this.output.info(`Native host exited (code=${String(code)}, signal=${String(signal)}).`);
       if (!this.stopping && !this.disposed && vscode.window.state.focused) {
         this.scheduleRefresh(1000);
@@ -287,7 +300,7 @@ class WorkspaceHaloController implements vscode.Disposable {
   }
 
   private pipeHostOutput(child: ChildProcess): void {
-    for (const stream of [child.stdout, child.stderr]) {
+    for (const [stream, protocol] of [[child.stdout, true], [child.stderr, false]] as const) {
       if (stream === null) {
         continue;
       }
@@ -299,16 +312,95 @@ class WorkspaceHaloController implements vscode.Disposable {
         pending = lines.pop() ?? "";
         for (const line of lines) {
           if (line.length > 0) {
-            this.output.appendLine(line);
+            this.handleHostLine(child, line, protocol);
           }
         }
       });
       stream.on("end", () => {
         if (pending.length > 0) {
-          this.output.appendLine(pending);
+          this.handleHostLine(child, pending, protocol);
         }
       });
     }
+  }
+
+  private handleHostLine(child: ChildProcess, line: string, protocol: boolean): void {
+    if (!protocol || !line.startsWith("workspace-halo-")) {
+      this.output.appendLine(line);
+      return;
+    }
+    if (this.host !== child) {
+      return;
+    }
+    const [message, token] = line.split(" ", 2);
+    switch (message) {
+      case "workspace-halo-ready":
+        this.hostReady = true;
+        this.hostBound = false;
+        this.signalWindowState(vscode.window.state.focused);
+        return;
+      case "workspace-halo-candidate":
+        if (
+          token === String(this.focusToken)
+          && vscode.window.state.focused
+          && !this.hostBound
+        ) {
+          this.writeHostCommand(child, `confirm ${token}`);
+        }
+        return;
+      case "workspace-halo-rejected":
+        if (
+          token === String(this.focusToken)
+          && vscode.window.state.focused
+          && !this.hostBound
+        ) {
+          this.scheduleBindingRetry(child);
+        }
+        return;
+      case "workspace-halo-bound":
+        this.hostBound = true;
+        if (this.bindingRetryTimer !== undefined) {
+          clearTimeout(this.bindingRetryTimer);
+          this.bindingRetryTimer = undefined;
+        }
+        this.output.info(`Native host confirmed this VS Code window (focus token ${token ?? "unknown"}).`);
+        return;
+      default:
+        this.output.appendLine(line);
+    }
+  }
+
+  private signalWindowState(focused: boolean): void {
+    const token = ++this.focusToken;
+    const child = this.host;
+    if (child === undefined || !this.hostReady || this.hostBound) {
+      return;
+    }
+    this.writeHostCommand(child, `${focused ? "focus" : "blur"} ${String(token)}`);
+  }
+
+  private scheduleBindingRetry(child: ChildProcess): void {
+    if (this.bindingRetryTimer !== undefined) {
+      clearTimeout(this.bindingRetryTimer);
+    }
+    this.bindingRetryTimer = setTimeout(() => {
+      this.bindingRetryTimer = undefined;
+      if (
+        this.host === child
+        && this.hostReady
+        && !this.hostBound
+        && vscode.window.state.focused
+      ) {
+        this.signalWindowState(true);
+      }
+    }, 50);
+  }
+
+  private writeHostCommand(child: ChildProcess, command: string): void {
+    if (child.stdin === null || child.stdin.destroyed || !child.stdin.writable) {
+      return;
+    }
+    child.stdin.write(`${command}\n`);
   }
 
   private async stopHost(): Promise<void> {
@@ -317,6 +409,12 @@ class WorkspaceHaloController implements vscode.Disposable {
       return;
     }
     this.host = undefined;
+    this.hostReady = false;
+    this.hostBound = false;
+    if (this.bindingRetryTimer !== undefined) {
+      clearTimeout(this.bindingRetryTimer);
+      this.bindingRetryTimer = undefined;
+    }
     this.stopping = true;
     if (child.exitCode === null && child.signalCode === null) {
       child.kill();

@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"flag"
 	"fmt"
@@ -216,6 +217,7 @@ type config struct {
 	allowAnyWindow bool
 	targetOverride uintptr
 	waitForVSCode  time.Duration
+	focusHandshake bool
 	windowMode     string
 	startupWarning string
 }
@@ -306,6 +308,7 @@ func parseFlags() (config, error) {
 	flag.BoolVar(&cfg.allowAnyWindow, "allow-any-window", false, "allow binding to a non-Code.exe foreground window for diagnostics")
 	flag.StringVar(&hwndValue, "hwnd", "", "optional target HWND in decimal or 0x-prefixed hexadecimal")
 	flag.DurationVar(&cfg.waitForVSCode, "wait-for-vscode", time.Minute, "time to wait for a stable VS Code window to become foreground")
+	flag.BoolVar(&cfg.focusHandshake, "focus-handshake", false, "require the launching extension to confirm the foreground window over stdin")
 	flag.StringVar(&cfg.windowMode, "window-mode", "owned", "overlay attachment mode: owned or child")
 	flag.StringVar(&cfg.startupWarning, "startup-warning", "", "warning copied from the VS Code extension into the native-host log")
 	flag.Parse()
@@ -410,22 +413,98 @@ func acquireTarget(cfg config, logger *log.Logger) (uintptr, error) {
 		}
 		return target, nil
 	}
+	if cfg.focusHandshake {
+		fmt.Fprintln(os.Stdout, "workspace-halo-ready")
+		return acquireTargetByFocusHandshake(os.Stdin, os.Stdout, foregroundCodeWindow, logger)
+	}
 
 	deadline := time.Now().Add(cfg.waitForVSCode)
 	logger.Printf("waiting up to %s; focus the stable VS Code window to identify", cfg.waitForVSCode)
 	for {
-		target := foregroundWindow()
-		if target != 0 {
-			path, err := processImagePath(target)
-			if err == nil && strings.EqualFold(filepath.Base(path), "Code.exe") {
-				return target, nil
-			}
+		target, err := foregroundCodeWindow()
+		if err == nil {
+			return target, nil
 		}
 		if cfg.waitForVSCode <= 0 || time.Now().After(deadline) {
 			return 0, errors.New("no stable VS Code window became foreground before the wait expired")
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
+}
+
+type foregroundCodeWindowFunc func() (uintptr, error)
+
+// acquireTargetByFocusHandshake prevents a host launched by one VS Code
+// extension window from adopting another VS Code window during process startup.
+// A focus message tells the host when the launching extension believes its own
+// window is focused. The host proposes the foreground HWND, then attaches only
+// if a matching confirmation arrives while that exact HWND is still foreground.
+func acquireTargetByFocusHandshake(
+	input io.Reader,
+	output io.Writer,
+	foreground foregroundCodeWindowFunc,
+	logger *log.Logger,
+) (uintptr, error) {
+	scanner := bufio.NewScanner(input)
+	var candidate uintptr
+	var candidateToken string
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) != 2 {
+			logger.Printf("ignored malformed focus-handshake command %q", scanner.Text())
+			continue
+		}
+		command, token := fields[0], fields[1]
+		switch command {
+		case "focus":
+			target, err := foreground()
+			if err != nil {
+				candidate, candidateToken = 0, ""
+				logger.Printf("focus proposal %s rejected: %v", token, err)
+				fmt.Fprintf(output, "workspace-halo-rejected %s\n", token)
+				continue
+			}
+			candidate, candidateToken = target, token
+			logger.Printf("focus proposal %s candidate hwnd=0x%X", token, target)
+			fmt.Fprintf(output, "workspace-halo-candidate %s\n", token)
+		case "blur":
+			candidate, candidateToken = 0, ""
+		case "confirm":
+			if candidate == 0 || token != candidateToken {
+				continue
+			}
+			target, err := foreground()
+			if err != nil || target != candidate {
+				logger.Printf("focus proposal %s became stale before confirmation", token)
+				candidate, candidateToken = 0, ""
+				fmt.Fprintf(output, "workspace-halo-rejected %s\n", token)
+				continue
+			}
+			fmt.Fprintf(output, "workspace-halo-bound %s\n", token)
+			return candidate, nil
+		default:
+			logger.Printf("ignored unknown focus-handshake command %q", command)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return 0, fmt.Errorf("read focus handshake: %w", err)
+	}
+	return 0, errors.New("focus handshake closed before a window was confirmed")
+}
+
+func foregroundCodeWindow() (uintptr, error) {
+	target := foregroundWindow()
+	if target == 0 {
+		return 0, errors.New("no foreground window is available")
+	}
+	path, err := processImagePath(target)
+	if err != nil {
+		return 0, err
+	}
+	if !strings.EqualFold(filepath.Base(path), "Code.exe") {
+		return 0, fmt.Errorf("foreground window belongs to %q, not stable VS Code (Code.exe)", path)
+	}
+	return target, nil
 }
 
 func fatalf(format string, values ...any) {
