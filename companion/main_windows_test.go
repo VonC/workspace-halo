@@ -5,6 +5,7 @@ package main
 import (
 	"image"
 	"image/color"
+	"math"
 	"testing"
 )
 
@@ -148,6 +149,127 @@ func TestRectanglesIntersect(t *testing.T) {
 	}
 	if rectanglesIntersect(base, rect{Left: 100, Top: 0, Right: 120, Bottom: 20}) {
 		t.Error("touching edges were treated as overlap")
+	}
+}
+
+func TestPillBackgroundColorTintsTheContrastPole(t *testing.T) {
+	tests := []struct {
+		name      string
+		text      color.NRGBA
+		lightPill bool
+	}{
+		// #ff2d55 luminance is 0.238, above the 0.179 break-even: the
+		// pill sits on the dark side; #2e7d5b (0.16) gets a light pill.
+		{"default red", color.NRGBA{R: 0xff, G: 0x2d, B: 0x55, A: 255}, false},
+		{"peacock green", color.NRGBA{R: 0x0b, G: 0xa9, B: 0x33, A: 255}, false},
+		{"dark green", color.NRGBA{R: 0x2e, G: 0x7d, B: 0x5b, A: 255}, true},
+		{"navy", color.NRGBA{R: 0x00, G: 0x00, B: 0x8b, A: 255}, true},
+	}
+	for _, test := range tests {
+		pill := pillBackgroundColor(test.text)
+		if ratio := contrastRatio(test.text, pill); ratio < 3 {
+			t.Errorf("%s: contrast %.2f is below the 3:1 large-text minimum", test.name, ratio)
+		}
+		if light := relativeLuminance(pill) > relativeLuminance(test.text); light != test.lightPill {
+			t.Errorf("%s: the pill sits on the wrong side of the text luminance", test.name)
+		}
+		if pill.R == pill.G && pill.G == pill.B {
+			t.Errorf("%s: pill %#v carries no trace of the text hue", test.name, pill)
+		}
+	}
+	// Achromatic texts have no hue to carry; contrast still holds.
+	for _, text := range []color.NRGBA{
+		{R: 0, G: 0, B: 0, A: 255},
+		{R: 255, G: 255, B: 255, A: 255},
+	} {
+		if ratio := contrastRatio(text, pillBackgroundColor(text)); ratio < 3 {
+			t.Errorf("achromatic text %#v: contrast %.2f is below 3:1", text, ratio)
+		}
+	}
+}
+
+func TestPillPixelRoundsTheEnds(t *testing.T) {
+	left, top, right, bottom := 0, 0, 100, 40
+	if !pillPixel(50, 20, left, top, right, bottom) {
+		t.Error("the pill center was not inside")
+	}
+	if !pillPixel(0, 20, left, top, right, bottom) {
+		t.Error("the left cap apex was not inside")
+	}
+	if pillPixel(1, 1, left, top, right, bottom) {
+		t.Error("the top-left corner was inside: the cap is not rounded")
+	}
+	if pillPixel(98, 38, left, top, right, bottom) {
+		t.Error("the bottom-right corner was inside: the cap is not rounded")
+	}
+	if pillPixel(50, 40, left, top, right, bottom) {
+		t.Error("a pixel below the pill was inside")
+	}
+}
+
+func TestSegmentedBorderAlternatesBlack(t *testing.T) {
+	c := color.NRGBA{R: 0xff, G: 0x2d, B: 0x55, A: 255}
+	black := color.NRGBA{A: 255}
+	canvas := image.NewNRGBA(image.Rect(0, 0, 200, 150))
+	drawBorder(canvas, c, 4, "solid", 50)
+	if got := canvas.NRGBAAt(10, 0); got != c {
+		t.Errorf("first top segment = %#v, want the halo color", got)
+	}
+	if got := canvas.NRGBAAt(60, 0); got != black {
+		t.Errorf("second top segment = %#v, want opaque black", got)
+	}
+	if got := canvas.NRGBAAt(1, 60); got != black {
+		t.Errorf("second left segment = %#v, want opaque black", got)
+	}
+	if got := canvas.NRGBAAt(60, 0); got.A != 255 {
+		t.Error("a black segment is transparent: it must be painted")
+	}
+	plain := image.NewNRGBA(image.Rect(0, 0, 200, 150))
+	drawBorder(plain, c, 4, "solid", 0)
+	if got := plain.NRGBAAt(60, 0); got != c {
+		t.Errorf("segment 0 should keep a continuous border, got %#v", got)
+	}
+}
+
+func TestPillBoundsHugTheInk(t *testing.T) {
+	left, top, right, bottom := pillBounds(100, 100, 400, 140)
+	if top != 120 {
+		t.Errorf("pill top = %d, want 120: the internal leading is not trimmed", top)
+	}
+	if bottom != 244 {
+		t.Errorf("pill bottom = %d, want 244", bottom)
+	}
+	if left != 54 || right != 546 {
+		t.Errorf("pill sides = %d..%d, want 54..546", left, right)
+	}
+	if height := bottom - top; height >= 140 {
+		t.Errorf("pill height %d is not tighter than the text cell 140", height)
+	}
+}
+
+func TestDitherCoverageMatchesOpacity(t *testing.T) {
+	coverage := func(opacity int) float64 {
+		kept := 0
+		for y := 0; y < 64; y++ {
+			for x := 0; x < 64; x++ {
+				if ditherKeep(x, y, opacity) {
+					kept++
+				}
+			}
+		}
+		return float64(kept) / (64 * 64)
+	}
+	if got := coverage(0); got != 0 {
+		t.Errorf("opacity 0 kept %.2f of the pixels, want 0", got)
+	}
+	if got := coverage(100); got != 1 {
+		t.Errorf("opacity 100 kept %.2f of the pixels, want 1", got)
+	}
+	if got := coverage(80); math.Abs(got-0.8) > 0.05 {
+		t.Errorf("opacity 80 kept %.2f of the pixels, want about 0.80", got)
+	}
+	if coverage(30) >= coverage(70) {
+		t.Error("coverage does not grow with opacity")
 	}
 }
 

@@ -208,6 +208,10 @@ type config struct {
 	fontFamily     string
 	fontWeight     int
 	shadow         bool
+	pill           bool
+	pillOpacity    int
+	pillMargin     int
+	borderSegment  int
 	logPath        string
 	allowAnyWindow bool
 	targetOverride uintptr
@@ -230,6 +234,8 @@ type application struct {
 	previewHit       bool
 	previewSource    string
 	stickyVisible    bool
+	wasFocused       bool
+	focusKnown       bool
 	cursorPos        point
 	previewCache     map[uintptr]bool
 	shiftDown        bool
@@ -292,6 +298,10 @@ func parseFlags() (config, error) {
 	flag.StringVar(&cfg.fontFamily, "font", "Segoe UI", "installed Windows font family")
 	flag.IntVar(&cfg.fontWeight, "font-weight", 700, "Windows font weight")
 	flag.BoolVar(&cfg.shadow, "shadow", true, "draw an automatic dark text shadow")
+	flag.BoolVar(&cfg.pill, "pill", true, "draw a contrast pill behind the workspace name")
+	flag.IntVar(&cfg.pillOpacity, "pill-opacity", 100, "pill opacity percentage, 0 to 100")
+	flag.IntVar(&cfg.pillMargin, "pill-margin", 50, "minimal left and right margin of the pill and name, in pixels")
+	flag.IntVar(&cfg.borderSegment, "border-segment", 50, "length of the alternating black border segments, 0 for a continuous border")
 	flag.StringVar(&cfg.logPath, "log", filepath.Join(os.TempDir(), "workspace-halo-companion.log"), "companion log file")
 	flag.BoolVar(&cfg.allowAnyWindow, "allow-any-window", false, "allow binding to a non-Code.exe foreground window for diagnostics")
 	flag.StringVar(&hwndValue, "hwnd", "", "optional target HWND in decimal or 0x-prefixed hexadecimal")
@@ -329,6 +339,15 @@ func parseFlags() (config, error) {
 	}
 	if cfg.fontWeight < 1 || cfg.fontWeight > 1000 {
 		return cfg, errors.New("--font-weight must be between 1 and 1000")
+	}
+	if cfg.pillOpacity < 0 || cfg.pillOpacity > 100 {
+		return cfg, errors.New("--pill-opacity must be between 0 and 100")
+	}
+	if cfg.pillMargin < 0 {
+		return cfg, errors.New("--pill-margin must be zero or positive")
+	}
+	if cfg.borderSegment < 0 {
+		return cfg, errors.New("--border-segment must be zero or positive")
 	}
 	if cfg.windowMode != "owned" && cfg.windowMode != "child" {
 		return cfg, fmt.Errorf("unsupported --window-mode %q", cfg.windowMode)
@@ -533,6 +552,14 @@ func (a *application) tick() error {
 	}
 
 	focused := foregroundWindow() == a.target
+	// Losing the focus re-arms the latch: a window the user just left must
+	// stay identifiable until the next click inside it. The first tick of a
+	// host bound to an unfocused window latches too.
+	if !focused && (a.wasFocused || !a.focusKnown) && !a.stickyVisible {
+		a.stickyVisible = true
+		a.logger.Printf("halo latched (focus lost)")
+	}
+	a.wasFocused, a.focusKnown = focused, true
 	a.pollDoubleShift(focused)
 	a.pollAltTab()
 	a.pollShellPreview()
@@ -875,7 +902,7 @@ func (a *application) renderOverlay(r rect) error {
 	w, h := r.width(), r.height()
 	canvas := image.NewNRGBA(image.Rect(0, 0, w, h))
 	drawScaledLogo(canvas, a.cfg.logo, a.cfg.borderWidth)
-	drawBorder(canvas, a.cfg.color, a.cfg.borderWidth, a.cfg.borderStyle)
+	drawBorder(canvas, a.cfg.color, a.cfg.borderWidth, a.cfg.borderStyle, a.cfg.borderSegment)
 
 	hdc, _, callErr := procCreateCompatibleDC.Call(0)
 	if hdc == 0 {
@@ -970,16 +997,41 @@ func drawScaledLogo(dst *image.NRGBA, src image.Image, borderWidth int) {
 	}
 }
 
-func drawBorder(dst *image.NRGBA, c color.NRGBA, width int, style string) {
+// drawBorder paints the halo border. With a positive segment length the
+// border is continuous and alternates runs of the halo color and of opaque
+// black along the perimeter: the black runs are painted, never transparent,
+// so the border always reads as one unbroken frame. A zero segment keeps
+// the plain motif rendering.
+func drawBorder(dst *image.NRGBA, c color.NRGBA, width int, style string, segment int) {
 	w, h := dst.Bounds().Dx(), dst.Bounds().Dy()
 	width = min(width, max(1, min(w, h)/2))
+	shape := style
+	if segment > 0 {
+		shape = "solid"
+	}
+	black := color.NRGBA{A: 255}
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
-			if borderPixel(x, y, w, h, width, style) {
-				dst.SetNRGBA(x, y, c)
+			if !borderPixel(x, y, w, h, width, shape) {
+				continue
 			}
+			if segment > 0 && segmentIsBlack(x, y, w, h, width, segment) {
+				dst.SetNRGBA(x, y, black)
+				continue
+			}
+			dst.SetNRGBA(x, y, c)
 		}
 	}
+}
+
+// segmentIsBlack alternates along the border direction: the horizontal
+// bands follow x and the vertical bands follow y, like the dashed motif.
+func segmentIsBlack(x, y, w, h, width, segment int) bool {
+	coordinate := x
+	if y >= width && y < h-width {
+		coordinate = y
+	}
+	return (coordinate/segment)%2 == 1
 }
 
 func borderPixel(x, y, w, h, width int, style string) bool {
@@ -1028,8 +1080,8 @@ func drawWorkspaceName(hdc uintptr, pixels []byte, w, h int, cfg config) error {
 	}
 	face, _ := syscall.UTF16PtrFromString(cfg.fontFamily)
 	maxHeight := max(1, h/3)
-	maxWidth := max(1, w-2*(cfg.borderWidth+16))
-	fontSize := findFontSize(hdc, face, text, textLength, cfg.fontWeight, maxWidth, maxHeight)
+	maxWidth := max(1, w-2*max(cfg.pillMargin, cfg.borderWidth+16))
+	fontSize := findFontSize(hdc, face, text, textLength, cfg.fontWeight, maxWidth, maxHeight, cfg.pill)
 	font := createFont(fontSize, cfg.fontWeight, face)
 	if font == 0 {
 		return errors.New("CreateFontW failed")
@@ -1041,6 +1093,10 @@ func drawWorkspaceName(hdc uintptr, pixels []byte, w, h int, cfg config) error {
 	procGetTextExtentPoint32W.Call(hdc, uintptr(unsafe.Pointer(&text[0])), uintptr(textLength), uintptr(unsafe.Pointer(&measured)))
 	x := (w - int(measured.CX)) / 2
 	y := (h - int(measured.CY)) / 2
+
+	if cfg.pill {
+		drawNamePill(pixels, w, h, x, y, int(measured.CX), int(measured.CY), cfg)
+	}
 
 	// Give fully transparent pixels a sentinel RGB value. GDI does not update
 	// the alpha channel, so the sentinel lets us identify anti-aliased glyph
@@ -1069,7 +1125,126 @@ func drawWorkspaceName(hdc uintptr, pixels []byte, w, h int, cfg config) error {
 	return nil
 }
 
-func findFontSize(hdc uintptr, face *uint16, text []uint16, textLength, weight, maxWidth, maxHeight int) int {
+// relativeLuminance is the WCAG relative luminance of an sRGB color, the
+// basis of the contrast-ratio computation.
+func relativeLuminance(c color.NRGBA) float64 {
+	linear := func(channel byte) float64 {
+		v := float64(channel) / 255
+		if v <= 0.03928 {
+			return v / 12.92
+		}
+		return math.Pow((v+0.055)/1.055, 2.4)
+	}
+	return 0.2126*linear(c.R) + 0.7152*linear(c.G) + 0.0722*linear(c.B)
+}
+
+// contrastRatio is the WCAG contrast ratio between two colors, from 1 to 21.
+func contrastRatio(a, b color.NRGBA) float64 {
+	la, lb := relativeLuminance(a), relativeLuminance(b)
+	if la < lb {
+		la, lb = lb, la
+	}
+	return (la + 0.05) / (lb + 0.05)
+}
+
+// pillBackgroundColor computes the pill color from the text color: the WCAG
+// break-even (L+0.05)^2 = 1.05*0.05 picks the higher-contrast pole, white
+// under a dark text and black under a light one, and one eighth of the text
+// color tints that pole so the pill visibly carries the name's hue. When
+// the tint would drop the contrast under 3:1, the WCAG minimum for large
+// text (and the halo name is always large), the pure pole wins: the pole
+// always reaches at least 4.58:1.
+func pillBackgroundColor(text color.NRGBA) color.NRGBA {
+	pole := color.NRGBA{A: 255}
+	if relativeLuminance(text) <= 0.1791287847 {
+		pole = color.NRGBA{R: 255, G: 255, B: 255, A: 255}
+	}
+	tinted := color.NRGBA{
+		R: byte((7*int(pole.R) + int(text.R)) / 8),
+		G: byte((7*int(pole.G) + int(text.G)) / 8),
+		B: byte((7*int(pole.B) + int(text.B)) / 8),
+		A: 255,
+	}
+	if contrastRatio(text, tinted) < 3 {
+		return pole
+	}
+	return tinted
+}
+
+// pillPixel reports whether the pixel belongs to the pill: a core rectangle
+// with a half-disc cap of radius (bottom-top)/2 at each end.
+func pillPixel(x, y, left, top, right, bottom int) bool {
+	if y < top || y >= bottom || x < left || x >= right {
+		return false
+	}
+	radius := (bottom - top) / 2
+	if x >= left+radius && x < right-radius {
+		return true
+	}
+	centerX := left + radius
+	if x >= right-radius {
+		centerX = right - radius
+	}
+	dx, dy := x-centerX, y-(top+radius)
+	return dx*dx+dy*dy <= radius*radius
+}
+
+// bayer4 is the 4x4 ordered-dither matrix. The color-key transparency of
+// the child overlay is binary, so an opacity percentage is rendered as the
+// matching share of pill pixels, spread evenly by the matrix.
+var bayer4 = [4][4]int{
+	{0, 8, 2, 10},
+	{12, 4, 14, 6},
+	{3, 11, 1, 9},
+	{15, 7, 13, 5},
+}
+
+func ditherKeep(x, y, opacity int) bool {
+	return bayer4[y&3][x&3]*100 < opacity*16
+}
+
+// pillBounds hugs the pill to the ink of the name. The GDI text cell is
+// taller than the visible glyphs: internal leading sits above them, about a
+// seventh of the cell for common UI fonts, so the pill trims it and keeps
+// only a sliver below the descent. The horizontal pad stays small; the
+// rounded caps provide the visual breathing room at the ends.
+func pillBounds(textX, textY, textW, textH int) (left, top, right, bottom int) {
+	top = textY + textH/7
+	bottom = textY + textH + textH/30
+	padX := textH / 3
+	left = textX - padX
+	right = textX + textW + padX
+	return left, top, right, bottom
+}
+
+// drawNamePill fills the contrast pill behind the workspace name directly
+// into the BGRA buffer, before GDI draws the letters, so their
+// anti-aliasing blends against the pill color.
+func drawNamePill(pixels []byte, w, h, textX, textY, textW, textH int, cfg config) {
+	background := pillBackgroundColor(cfg.color)
+	left, top, right, bottom := pillBounds(textX, textY, textW, textH)
+	// The font fitting already reserves the margins; this clamp only guards
+	// the integer rounding of the cap overhang.
+	left = max(left, cfg.pillMargin)
+	right = min(right, w-cfg.pillMargin)
+	for y := max(0, top); y < min(h, bottom); y++ {
+		for x := max(0, left); x < min(w, right); x++ {
+			if !pillPixel(x, y, left, top, right, bottom) || !ditherKeep(x, y, cfg.pillOpacity) {
+				continue
+			}
+			i := (y*w + x) * 4
+			pixels[i] = background.B
+			pixels[i+1] = background.G
+			pixels[i+2] = background.R
+			pixels[i+3] = 255
+		}
+	}
+}
+
+// findFontSize fits the name into maxWidth and maxHeight; with the pill on,
+// the fitted width includes the pill cap overhang of a third of the text
+// height on each side, so the whole pill respects the margins.
+func findFontSize(hdc uintptr, face *uint16, text []uint16, textLength, weight, maxWidth, maxHeight int, pill bool) int {
 	low, high, best := 1, maxHeight, 1
 	for low <= high {
 		candidate := (low + high) / 2
@@ -1083,7 +1258,11 @@ func findFontSize(hdc uintptr, face *uint16, text []uint16, textLength, weight, 
 		procGetTextExtentPoint32W.Call(hdc, uintptr(unsafe.Pointer(&text[0])), uintptr(textLength), uintptr(unsafe.Pointer(&measured)))
 		procSelectObject.Call(hdc, previous)
 		procDeleteObject.Call(font)
-		if int(measured.CX) <= maxWidth && int(measured.CY) <= maxHeight {
+		width := int(measured.CX)
+		if pill {
+			width += 2 * (int(measured.CY) / 3)
+		}
+		if width <= maxWidth && int(measured.CY) <= maxHeight {
 			best = candidate
 			low = candidate + 1
 		} else {
