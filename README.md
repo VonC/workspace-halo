@@ -22,8 +22,13 @@ window's Alt+Tab thumbnail. It never floats above unrelated applications.
 - Shows the halo on demand with a double press and release of Shift.
 - Hides an on-demand halo on the next mouse or keyboard interaction.
 - Fits the workspace name to the window, up to one third of its height.
+- Draws the name on a rounded pill tinted from the name color toward its
+  higher-contrast pole (white or black by WCAG luminance), at a configurable
+  opacity.
 - Fits or enlarges the logo into a square up to one third of the window height.
-- Supports solid, double, dashed, and dotted borders.
+- Draws the border with alternating halo-color and opaque black segments by
+  default; solid, double, dashed, and dotted continuous motifs remain
+  available with a zero segment length.
 - Uses `peacock.color` when Peacock has a workspace-scoped color; otherwise it
   uses `workspaceHalo.color`.
 - Watches the logo and workspace settings and restarts the renderer when they
@@ -109,7 +114,11 @@ intentionally ignored.
   "workspaceHalo.borderMotif": "solid",
   "workspaceHalo.fontFamily": "Segoe UI",
   "workspaceHalo.fontWeight": 700,
-  "workspaceHalo.textShadow": true
+  "workspaceHalo.textShadow": true,
+  "workspaceHalo.namePill": true,
+  "workspaceHalo.pillOpacity": 100,
+  "workspaceHalo.pillMargin": 50,
+  "workspaceHalo.borderSegment": 50
 }
 ```
 
@@ -121,6 +130,10 @@ intentionally ignored.
 | `workspaceHalo.fontFamily` | `Segoe UI` | An installed Windows font family. |
 | `workspaceHalo.fontWeight` | `700` | Windows font weight from 1 to 1000. |
 | `workspaceHalo.textShadow` | `true` | Draw a dark shadow behind the name. |
+| `workspaceHalo.namePill` | `true` | Draw the contrast pill behind the name. |
+| `workspaceHalo.pillOpacity` | `100` | Pill opacity percentage, 0 to 100, dithered. |
+| `workspaceHalo.pillMargin` | `50` | Minimal left and right margin of pill and name. |
+| `workspaceHalo.borderSegment` | `50` | Black border segment length; 0 for continuous. |
 
 A valid workspace-scoped `peacock.color` value takes priority over
 `workspaceHalo.color`. The border and name always share the resulting color.
