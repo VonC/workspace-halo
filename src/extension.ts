@@ -17,6 +17,10 @@ interface HaloSettings {
   readonly fontFamily: string;
   readonly fontWeight: number;
   readonly textShadow: boolean;
+  readonly namePill: boolean;
+  readonly pillOpacity: number;
+  readonly pillMargin: number;
+  readonly borderSegment: number;
 }
 
 interface Registration {
@@ -203,7 +207,11 @@ class WorkspaceHaloController implements vscode.Disposable {
       ),
       fontFamily: workspaceScopedValue(halo.inspect<string>("fontFamily"), "Segoe UI"),
       fontWeight: workspaceScopedValue(halo.inspect<number>("fontWeight"), 700),
-      textShadow: workspaceScopedValue(halo.inspect<boolean>("textShadow"), true)
+      textShadow: workspaceScopedValue(halo.inspect<boolean>("textShadow"), true),
+      namePill: workspaceScopedValue(halo.inspect<boolean>("namePill"), true),
+      pillOpacity: workspaceScopedValue(halo.inspect<number>("pillOpacity"), 100),
+      pillMargin: workspaceScopedValue(halo.inspect<number>("pillMargin"), 50),
+      borderSegment: workspaceScopedValue(halo.inspect<number>("borderSegment"), 50)
     };
   }
 
@@ -240,6 +248,10 @@ class WorkspaceHaloController implements vscode.Disposable {
       "--font", registration.settings.fontFamily,
       "--font-weight", String(registration.settings.fontWeight),
       `--shadow=${String(registration.settings.textShadow)}`,
+      `--pill=${String(registration.settings.namePill)}`,
+      "--pill-opacity", String(registration.settings.pillOpacity),
+      "--pill-margin", String(registration.settings.pillMargin),
+      "--border-segment", String(registration.settings.borderSegment),
       "--log", logPath,
       "--wait-for-vscode", "5s"
     ];
