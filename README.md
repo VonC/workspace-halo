@@ -2,34 +2,35 @@
 
 Workspace Halo makes Visual Studio Code workspaces immediately recognizable on
 Windows 11. It draws a configurable border, the workspace name, and its logo
-over the VS Code window when Windows shows Alt+Tab, the taskbar thumbnail
-previews, or Task View, when the window is covered, or when you press Shift
-twice. A minimized VS Code window keeps its halo so every shell miniature can
-identify it.
+over the VS Code window only at extension activation, while another window
+overlaps it, during Alt+Tab, or while the mouse hovers a Windows taskbar.
 
 The overlay is a child of the tracked VS Code window, so it never floats above
-unrelated applications. When minimization begins, the companion briefly restores
-the transition, lets DWM compose the visible child halo, and then replays the
-minimize request.
+unrelated applications. A halo shown at activation is dismissed by the first
+mouse click in the focused VS Code window, or when an initially unfocused window
+gains focus. After that, focus hides ambient overlap halos, while explicit
+Alt+Tab and taskbar-hover triggers remain visible. Halo overlays are excluded
+from overlap detection, so several relocated VS Code windows cannot trigger one
+another in a loop when Windows consolidates the desktop onto one monitor.
 
 ![Workspace Halo identifying several VS Code workspaces in windows and Alt+Tab](images/screen-workspace-halo.png)
 
 ## Features
 
 - Starts tracking an unambiguous workspace-titled VS Code window as soon as the
-  extension is ready, without waiting for the user to focus or click it.
+  extension is ready, and shows its activation halo immediately.
+- Dismisses that activation halo on the first mouse click while the VS Code
+  window is focused, or when an initially unfocused window gains focus.
+- Keeps ambient overlap halos hidden while VS Code is focused after activation
+  has been acknowledged.
 - Shows the halo as soon as Alt+Tab is pressed, even when the VS Code window is
   fully visible on another monitor.
-- Shows the halo when the mouse reaches the taskbar (where the thumbnail
-  previews appear), including on the focused window, so every miniature
-  carries its halo.
-- Keeps the halo visible while its VS Code window is minimized.
+- Shows the halo when the mouse reaches a taskbar, where thumbnail previews may
+  appear, including when that VS Code window remains focused.
 - Shows the halo while a VS Code window is even partially obscured, including
-  by an inactive always-on-top window.
-- Hides the halo from every fully visible, non-minimized window when no shell
-  preview gesture or explicit double-Shift request is active.
-- Shows the halo on demand with a double press and release of Shift.
-- Hides an on-demand halo on the next mouse or keyboard interaction.
+  by an inactive always-on-top window, unless that VS Code window is focused.
+- Ignores every Workspace Halo overlay during overlap detection, preventing
+  feedback loops between VS Code windows moved onto the same monitor.
 - Fits the workspace name to the window, up to one third of its height.
 - Draws the name on a rounded pill tinted from the name color toward its
   higher-contrast pole (white or black by WCAG luminance), at a configurable
@@ -171,17 +172,13 @@ by a particular top-level window. Workspace Halo therefore has two small parts:
   back to their two-phase focus handshake. The host proposes the foreground
   `Code.exe` HWND; the extension confirms only while its own window is still
   focused, and the host rechecks the same HWND before binding.
-- Once bound, the host detects Alt+Tab, double-Shift, focus, and geometric
-  occlusion, and renders a child overlay. Making it a child is what lets Windows
-  keep the halo with its VS Code window without placing it over unrelated
-  applications.
+- Once bound, the host renders its activation halo and detects Alt+Tab, taskbar
+  hovering, focus, and geometric occlusion. Making the overlay a child keeps it
+  with its VS Code window without placing it over unrelated applications.
   Occlusion comparisons use DWM's visible frame bounds, excluding invisible
   resize borders that extend across the boundary between adjacent monitors.
-
-- On minimize start, the host restores the first transition without activation,
-  presents and flushes the child halo, waits briefly for composition, and then
-  replays the minimize request. This gives DWM an already-composed window to use
-  for minimized Alt+Tab and taskbar thumbnails.
+  Workspace Halo overlay windows are also excluded from those comparisons, so
+  one workspace's halo cannot cause another workspace's halo to appear.
 
 The host is a build artifact, not a separate user-installed component. Closing
 the VS Code window or deactivating the extension stops its host process.
