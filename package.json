@@ -5,6 +5,10 @@
   "version": "0.0.18",
   "publisher": "vonc",
   "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/VonC/workspace-halo.git"
+  },
   "icon": "images/logo-workspace-halo.png",
   "engines": {
     "vscode": "^1.99.0"
