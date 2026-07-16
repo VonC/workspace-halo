@@ -3,11 +3,14 @@
 ## Unreleased
 
 - Restrict halo display to extension activation, real window overlap, Alt+Tab,
-  and mouse taskbar hovering; remove minimized-window, Task View, shell-flyout,
-  and double-Shift display paths.
+  mouse taskbar hovering, double-Shift, and minimized-window thumbnail
+  composition; remove Task View and shell-flyout-only display paths.
 - Render the activation halo immediately and dismiss it on a focused click or
   focus gain. Alt+Tab and taskbar-hover triggers outrank focus; focus suppresses
   ambient overlap halos.
+- Restore double-Shift as an explicit focused-window trigger and restore the
+  DWM composition/replay path that preserves halos in minimized Alt+Tab and
+  taskbar thumbnails.
 - Ignore every Workspace Halo overlay during occlusion checks, preventing
   relocated VS Code windows from triggering one another indefinitely when a
   multi-monitor desktop is consolidated onto one monitor.
