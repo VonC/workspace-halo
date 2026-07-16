@@ -181,26 +181,49 @@ func TestLogoUpscalesToOneThirdHeight(t *testing.T) {
 
 func TestVisibilityStatePrecedence(t *testing.T) {
 	tests := []struct {
-		activation, focused, altTab, taskbarHover, occluded bool
-		wantVisible                                         bool
-		wantReason                                          string
+		manual, activation, minimized, focused, altTab, taskbarHover, occluded bool
+		wantVisible                                                            bool
+		wantReason                                                             string
 	}{
-		{true, true, true, true, true, true, "activation"},
-		{false, true, true, true, true, true, "alt-tab"},
-		{false, true, false, true, true, true, "taskbar-hover"},
-		{false, true, false, false, true, false, "focused"},
-		{false, false, false, false, true, true, "occluded"},
-		{false, false, false, false, false, false, "hidden"},
+		{true, true, true, true, true, true, true, true, "double-shift"},
+		{false, true, true, true, true, true, true, true, "activation"},
+		{false, false, true, true, true, true, true, true, "alt-tab"},
+		{false, false, true, true, false, true, true, true, "taskbar-hover"},
+		{false, false, true, false, false, false, true, true, "minimized"},
+		{false, false, false, true, false, false, true, false, "focused"},
+		{false, false, false, false, false, false, true, true, "occluded"},
+		{false, false, false, false, false, false, false, false, "hidden"},
 	}
 	for _, test := range tests {
-		visible, reason := visibilityState(test.activation, test.focused, test.altTab, test.taskbarHover, test.occluded)
+		visible, reason := visibilityState(
+			test.manual,
+			test.activation,
+			test.minimized,
+			test.focused,
+			test.altTab,
+			test.taskbarHover,
+			test.occluded,
+		)
 		if visible != test.wantVisible || reason != test.wantReason {
 			t.Errorf(
-				"visibilityState(%t, %t, %t, %t, %t) = (%t, %q), want (%t, %q)",
-				test.activation, test.focused, test.altTab, test.taskbarHover, test.occluded,
+				"visibilityState(%t, %t, %t, %t, %t, %t, %t) = (%t, %q), want (%t, %q)",
+				test.manual, test.activation, test.minimized, test.focused,
+				test.altTab, test.taskbarHover, test.occluded,
 				visible, reason, test.wantVisible, test.wantReason,
 			)
 		}
+	}
+}
+
+func TestDoubleShiftReleaseTriggersWithinFourHundredMilliseconds(t *testing.T) {
+	triggered, next := doubleShiftRelease(1_000, 1_400)
+	if !triggered || next != 0 {
+		t.Fatalf("second release = (%t, %d), want (true, 0)", triggered, next)
+	}
+
+	triggered, next = doubleShiftRelease(1_000, 1_401)
+	if triggered || next != 1_401 {
+		t.Fatalf("late second release = (%t, %d), want (false, 1401)", triggered, next)
 	}
 }
 
@@ -220,6 +243,63 @@ func TestActivationHaloDismissal(t *testing.T) {
 		if got := shouldDismissActivation(test.activation, test.focused, test.wasFocused, test.pointerDown); got != test.want {
 			t.Errorf("%s: shouldDismissActivation() = %t, want %t", test.name, got, test.want)
 		}
+	}
+}
+
+func TestMinimizeTransitionTargetsOnlyTheTrackedTopLevelWindow(t *testing.T) {
+	const target = uintptr(0x1234)
+	tests := []struct {
+		name              string
+		event             uint32
+		hwnd              uintptr
+		idObject, idChild int32
+		wantMatched       bool
+		wantStarting      bool
+	}{
+		{"start", eventSystemMinimizeStart, target, objidWindow, childidSelf, true, true},
+		{"end", eventSystemMinimizeEnd, target, objidWindow, childidSelf, true, false},
+		{"other window", eventSystemMinimizeStart, 0x5678, objidWindow, childidSelf, false, false},
+		{"child object", eventSystemMinimizeStart, target, objidWindow, 1, false, false},
+		{"other event", 0x0003, target, objidWindow, childidSelf, false, false},
+	}
+	for _, test := range tests {
+		matched, starting := minimizeTransition(test.event, test.hwnd, target, test.idObject, test.idChild)
+		if matched != test.wantMatched || starting != test.wantStarting {
+			t.Errorf(
+				"%s: minimizeTransition() = (%t, %t), want (%t, %t)",
+				test.name, matched, starting, test.wantMatched, test.wantStarting,
+			)
+		}
+	}
+}
+
+func TestMinimizeEventTransitionPrimesThenAcceptsTheReplay(t *testing.T) {
+	phase, action := minimizeEventTransition(minimizeIdle, true)
+	if phase != minimizePriming || action != minimizePrime {
+		t.Fatalf("initial start = (%v, %v), want priming/prime", phase, action)
+	}
+
+	phase, action = minimizeEventTransition(phase, false)
+	if phase != minimizePriming || action != minimizeNoAction {
+		t.Fatalf("internal restore = (%v, %v), want priming/no-action", phase, action)
+	}
+
+	phase = minimizeReplaying
+	phase, action = minimizeEventTransition(phase, true)
+	if phase != minimizeCommitted || action != minimizeAllowReplay {
+		t.Fatalf("replayed start = (%v, %v), want committed/allow-replay", phase, action)
+	}
+
+	phase, action = minimizeEventTransition(phase, false)
+	if phase != minimizeIdle || action != minimizeRestored {
+		t.Fatalf("real restore = (%v, %v), want idle/restored", phase, action)
+	}
+}
+
+func TestDuplicateMinimizeStartDoesNotRestartPriming(t *testing.T) {
+	phase, action := minimizeEventTransition(minimizePriming, true)
+	if phase != minimizePriming || action != minimizeNoAction {
+		t.Fatalf("duplicate start = (%v, %v), want priming/no-action", phase, action)
 	}
 }
 

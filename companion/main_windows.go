@@ -42,6 +42,8 @@ const (
 	htTransparent = ^uintptr(0)
 	maNoActivate  = uintptr(3)
 
+	swMinimize       = 6
+	swRestore        = 9
 	swHide           = 0
 	swShowNoActivate = 4
 
@@ -76,12 +78,19 @@ const (
 	vkMButton  = uintptr(0x04)
 	vkXButton1 = uintptr(0x05)
 	vkXButton2 = uintptr(0x06)
+	vkShift    = uintptr(0x10)
 	vkMenu     = uintptr(0x12)
 	vkTab      = uintptr(0x09)
 
 	processQueryLimitedInformation = uint32(0x1000)
 	dwmwaCloaked                   = uint32(14)
 	dwmwaExtendedFrameBounds       = uint32(9)
+
+	eventSystemMinimizeStart = uint32(0x0016)
+	eventSystemMinimizeEnd   = uint32(0x0017)
+	objidWindow              = int32(0)
+	childidSelf              = int32(0)
+	wineventOutofcontext     = uint32(0x0000)
 )
 
 var (
@@ -115,6 +124,7 @@ var (
 	procGetClassNameW                 = user32.NewProc("GetClassNameW")
 	procGetWindowTextW                = user32.NewProc("GetWindowTextW")
 	procGetAsyncKeyState              = user32.NewProc("GetAsyncKeyState")
+	procGetLastInputInfo              = user32.NewProc("GetLastInputInfo")
 	procSetTimer                      = user32.NewProc("SetTimer")
 	procKillTimer                     = user32.NewProc("KillTimer")
 	procGetMessageW                   = user32.NewProc("GetMessageW")
@@ -124,6 +134,8 @@ var (
 	procPostQuitMessage               = user32.NewProc("PostQuitMessage")
 	procUpdateLayeredWindow           = user32.NewProc("UpdateLayeredWindow")
 	procSetProcessDpiAwarenessContext = user32.NewProc("SetProcessDpiAwarenessContext")
+	procSetWinEventHook               = user32.NewProc("SetWinEventHook")
+	procUnhookWinEvent                = user32.NewProc("UnhookWinEvent")
 
 	procCreateCompatibleDC    = gdi32.NewProc("CreateCompatibleDC")
 	procDeleteDC              = gdi32.NewProc("DeleteDC")
@@ -144,11 +156,49 @@ var (
 	procSetLastError               = kernel32.NewProc("SetLastError")
 
 	procDwmGetWindowAttribute = dwmapi.NewProc("DwmGetWindowAttribute")
+	procDwmFlush              = dwmapi.NewProc("DwmFlush")
 )
 
 type point struct{ X, Y int32 }
 type size struct{ CX, CY int32 }
 type rect struct{ Left, Top, Right, Bottom int32 }
+type minimizePhase uint8
+
+const (
+	minimizeIdle minimizePhase = iota
+	minimizePriming
+	minimizeReplaying
+	minimizeCommitted
+)
+
+type minimizeAction uint8
+
+const (
+	minimizeNoAction minimizeAction = iota
+	minimizePrime
+	minimizeAllowReplay
+	minimizeRestored
+)
+
+const minimizeReplayDelayMS = uint64(75)
+
+func minimizeEventTransition(phase minimizePhase, starting bool) (minimizePhase, minimizeAction) {
+	if starting {
+		switch phase {
+		case minimizeIdle:
+			return minimizePriming, minimizePrime
+		case minimizeReplaying:
+			return minimizeCommitted, minimizeAllowReplay
+		default:
+			return phase, minimizeNoAction
+		}
+	}
+	if phase == minimizePriming {
+		// Ignore the restore generated while cancelling the first minimize.
+		return phase, minimizeNoAction
+	}
+	return minimizeIdle, minimizeRestored
+}
 
 func (r rect) width() int             { return int(r.Right - r.Left) }
 func (r rect) height() int            { return int(r.Bottom - r.Top) }
@@ -199,6 +249,8 @@ type bitmapInfo struct {
 	Colors [1]rgbQuad
 }
 type blendFunction struct{ BlendOp, BlendFlags, SourceConstantAlpha, AlphaFormat byte }
+type lastInputInfo struct{ CbSize, DwTime uint32 }
+
 type config struct {
 	name           string
 	logo           image.Image
@@ -226,20 +278,30 @@ type application struct {
 	target            uintptr
 	overlay           uintptr
 	targetRect        rect
+	minimizeHook      uintptr
+	minimizeState     minimizePhase
+	minimizeReplayAt  uint64
 	renderedRect      rect
 	visible           bool
 	visibilityReason  string
 	activationVisible bool
 	wasFocused        bool
+	manualVisible     bool
 	altTabVisible     bool
 	taskbarHover      bool
 	taskbarHit        bool
 	cursorPos         point
+	shiftDown         bool
+	lastShiftRelease  uint64
+	lastManualInput   uint32
 	logger            *log.Logger
 	logFile           *os.File
 }
 
-var activeApp *application
+var (
+	activeApp                *application
+	minimizeWinEventCallback = syscall.NewCallback(minimizeWinEventProc)
+)
 
 func main() {
 	runtime.LockOSThread()
@@ -282,6 +344,9 @@ func main() {
 		logger.Printf("initial activation show error: %v", err)
 	} else {
 		app.visibilityReason = "activation"
+	}
+	if err := app.installMinimizeHook(); err != nil {
+		fatalf("watch minimize events: %v", err)
 	}
 
 	logger.Printf("bound to hwnd=0x%X class=%q title=%q", target, windowClass(target), windowTitle(target))
@@ -680,10 +745,148 @@ func (a *application) run() error {
 }
 
 func (a *application) close() {
+	if a.minimizeHook != 0 {
+		procUnhookWinEvent.Call(a.minimizeHook)
+		a.minimizeHook = 0
+	}
 	if a.overlay != 0 {
 		procKillTimer.Call(a.overlay, 1)
 		procDestroyWindow.Call(a.overlay)
 	}
+}
+
+// installMinimizeHook watches the target process for the system's pre-minimize
+// notification. The first transition is restored, the child halo is composed,
+// and minimization is replayed after DWM has presented the halo for several
+// frames.
+func (a *application) installMinimizeHook() error {
+	var processID uint32
+	threadID, _, callErr := procGetWindowThreadProcessId.Call(
+		a.target,
+		uintptr(unsafe.Pointer(&processID)),
+	)
+	if threadID == 0 || processID == 0 {
+		return fmt.Errorf("GetWindowThreadProcessId: %w", callErr)
+	}
+	hook, _, callErr := procSetWinEventHook.Call(
+		uintptr(eventSystemMinimizeStart),
+		uintptr(eventSystemMinimizeEnd),
+		0,
+		minimizeWinEventCallback,
+		uintptr(processID),
+		0,
+		uintptr(wineventOutofcontext),
+	)
+	if hook == 0 {
+		return fmt.Errorf("SetWinEventHook: %w", callErr)
+	}
+	a.minimizeHook = hook
+	return nil
+}
+
+// minimizeTransition filters WinEvent callbacks to the top-level target and
+// maps the two system events to the state kept between the event and the next
+// polling tick.
+func minimizeTransition(event uint32, hwnd, target uintptr, idObject, idChild int32) (matched, starting bool) {
+	if hwnd != target || idObject != objidWindow || idChild != childidSelf {
+		return false, false
+	}
+	switch event {
+	case eventSystemMinimizeStart:
+		return true, true
+	case eventSystemMinimizeEnd:
+		return true, false
+	default:
+		return false, false
+	}
+}
+
+func minimizeWinEventProc(_, event, hwnd, idObject, idChild, _, _ uintptr) uintptr {
+	app := activeApp
+	if app == nil {
+		return 0
+	}
+	matched, starting := minimizeTransition(
+		uint32(event),
+		hwnd,
+		app.target,
+		int32(idObject),
+		int32(idChild),
+	)
+	if !matched {
+		return 0
+	}
+
+	next, action := minimizeEventTransition(app.minimizeState, starting)
+	app.minimizeState = next
+	switch action {
+	case minimizePrime:
+		wasMinimized := app.restoreTargetForMinimizePriming()
+		if err := app.composeHalo(); err != nil {
+			app.logger.Printf("minimize prime render error: %v", err)
+		}
+		app.minimizeReplayAt = getTickCount64() + minimizeReplayDelayMS
+		app.logger.Printf(
+			"minimize intercepted: restored=%t replay-in=%dms",
+			wasMinimized,
+			minimizeReplayDelayMS,
+		)
+	case minimizeAllowReplay:
+		app.minimizeReplayAt = 0
+		if err := app.composeHalo(); err != nil {
+			app.logger.Printf("minimize replay compose error: %v", err)
+		}
+		app.logger.Printf("minimize replay accepted with composed halo")
+	case minimizeRestored:
+		app.minimizeReplayAt = 0
+		app.logger.Printf("minimize end")
+	}
+	return 0
+}
+
+func (a *application) restoreTargetForMinimizePriming() bool {
+	minimized, _, _ := procIsIconic.Call(a.target)
+	procShowWindow.Call(a.target, swShowNoActivate)
+	stillMinimized, _, _ := procIsIconic.Call(a.target)
+	if stillMinimized != 0 {
+		procShowWindow.Call(a.target, swRestore)
+	}
+	return minimized != 0
+}
+
+func (a *application) composeHalo() error {
+	if err := a.updateGeometryAndBitmap(); err != nil {
+		return err
+	}
+	if err := a.show(); err != nil {
+		return err
+	}
+	return flushDwm()
+}
+
+func (a *application) replayPendingMinimize(now uint64) {
+	if a.minimizeState != minimizePriming || now < a.minimizeReplayAt {
+		return
+	}
+
+	minimized, _, _ := procIsIconic.Call(a.target)
+	if minimized != 0 {
+		a.restoreTargetForMinimizePriming()
+		if err := a.composeHalo(); err != nil {
+			a.logger.Printf("minimize re-prime render error: %v", err)
+		}
+		a.minimizeReplayAt = now + minimizeReplayDelayMS
+		a.logger.Printf("minimize re-primed after original transition completed")
+		return
+	}
+
+	if err := a.composeHalo(); err != nil {
+		a.logger.Printf("minimize replay render error: %v", err)
+	}
+	a.minimizeState = minimizeReplaying
+	a.minimizeReplayAt = 0
+	a.logger.Printf("minimize replay requested after halo composition")
+	procShowWindow.Call(a.target, swMinimize)
 }
 
 func (a *application) tick() error {
@@ -692,6 +895,8 @@ func (a *application) tick() error {
 		procPostMessageW.Call(a.overlay, uintptr(wmClose), 0, 0)
 		return nil
 	}
+	a.replayPendingMinimize(getTickCount64())
+
 	focused := foregroundWindow() == a.target
 	pointerDown := false
 	if a.activationVisible && focused {
@@ -701,8 +906,14 @@ func (a *application) tick() error {
 		a.activationVisible = false
 	}
 	a.wasFocused = focused
+	a.pollDoubleShift(focused)
 	a.pollAltTab()
 	a.pollTaskbarHover()
+	if a.manualVisible {
+		if !focused || lastInputTime() != a.lastManualInput {
+			a.manualVisible = false
+		}
+	}
 
 	minimized, _, _ := procIsIconic.Call(a.target)
 	visible, _, _ := procIsWindowVisible.Call(a.target)
@@ -711,7 +922,15 @@ func (a *application) tick() error {
 		occluded = a.hasOccludingWindow()
 	}
 
-	desired, reason := visibilityState(a.activationVisible, focused, a.altTabVisible, a.taskbarHover, occluded)
+	desired, reason := visibilityState(
+		a.manualVisible,
+		a.activationVisible,
+		minimized != 0 || a.minimizeState != minimizeIdle,
+		focused,
+		a.altTabVisible,
+		a.taskbarHover,
+		occluded,
+	)
 	if desired {
 		if err := a.updateGeometryAndBitmap(); err != nil {
 			return err
@@ -725,7 +944,7 @@ func (a *application) tick() error {
 		}
 	}
 	if reason != a.visibilityReason {
-		a.logger.Printf("visibility=%s focused=%t", reason, focused)
+		a.logger.Printf("visibility=%s focused=%t minimized=%t", reason, focused, minimized != 0)
 		a.visibilityReason = reason
 	}
 	return nil
@@ -749,17 +968,21 @@ func (a *application) pollAltTab() {
 	}
 }
 
-// visibilityState limits rendering to activation, Alt+Tab, taskbar hover, and
-// actual overlap. Explicit shell gestures outrank focus; focus suppresses only
-// ambient overlap once the activation halo has been dismissed.
-func visibilityState(activation, focused, altTab, taskbarHover, occluded bool) (bool, string) {
+// visibilityState limits rendering to explicit user and shell triggers, the
+// initial activation, a minimized target, and actual overlap. Focus suppresses
+// only ambient overlap after activation has been acknowledged.
+func visibilityState(manual, activation, minimized, focused, altTab, taskbarHover, occluded bool) (bool, string) {
 	switch {
+	case manual:
+		return true, "double-shift"
 	case activation:
 		return true, "activation"
 	case altTab:
 		return true, "alt-tab"
 	case taskbarHover:
 		return true, "taskbar-hover"
+	case minimized:
+		return true, "minimized"
 	case focused:
 		return false, "focused"
 	case occluded:
@@ -814,6 +1037,32 @@ func (a *application) pollTaskbarHover() {
 	a.taskbarHover = a.taskbarHit
 }
 
+func (a *application) pollDoubleShift(focused bool) {
+	down := asyncKeyDown(vkShift)
+	if down == a.shiftDown {
+		return
+	}
+	a.shiftDown = down
+	if down || !focused {
+		return
+	}
+	now := getTickCount64()
+	triggered, nextRelease := doubleShiftRelease(a.lastShiftRelease, now)
+	a.lastShiftRelease = nextRelease
+	if triggered {
+		a.manualVisible = true
+		a.lastManualInput = lastInputTime()
+		a.logger.Printf("double-shift gesture")
+	}
+}
+
+func doubleShiftRelease(lastRelease, now uint64) (triggered bool, nextRelease uint64) {
+	if lastRelease != 0 && now-lastRelease <= 400 {
+		return true, 0
+	}
+	return false, now
+}
+
 func (a *application) updateGeometryAndBitmap() error {
 	r, err := a.overlayRect()
 	if err != nil {
@@ -850,6 +1099,14 @@ func (a *application) overlayRect() (rect, error) {
 		return clientRect(a.target)
 	}
 	return windowRect(a.target)
+}
+
+func flushDwm() error {
+	result, _, _ := procDwmFlush.Call()
+	if int32(result) < 0 {
+		return fmt.Errorf("DwmFlush: HRESULT 0x%08X", uint32(result))
+	}
+	return nil
 }
 
 func (a *application) show() error {
@@ -1355,6 +1612,21 @@ func pointerButtonDown() bool {
 		}
 	}
 	return false
+}
+
+func lastInputTime() uint32 {
+	info := lastInputInfo{CbSize: uint32(unsafe.Sizeof(lastInputInfo{}))}
+	result, _, _ := procGetLastInputInfo.Call(uintptr(unsafe.Pointer(&info)))
+	if result == 0 {
+		return 0
+	}
+	return info.DwTime
+}
+
+func getTickCount64() uint64 {
+	proc := kernel32.NewProc("GetTickCount64")
+	result, _, _ := proc.Call()
+	return uint64(result)
 }
 
 func windowRect(hwnd uintptr) (rect, error) {
