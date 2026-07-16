@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.19
+
+- Start the native host as soon as the extension is ready and bind immediately
+  when exactly one stable VS Code window title matches the workspace name.
+- Keep the focus-confirmation handshake as the fallback for customized or
+  ambiguous window titles.
+
 ## 0.0.18
 
 - Use DWM extended-frame bounds for occlusion checks so invisible resize borders
