@@ -16,6 +16,8 @@ minimize request.
 
 ## Features
 
+- Starts tracking an unambiguous workspace-titled VS Code window as soon as the
+  extension is ready, without waiting for the user to focus or click it.
 - Shows the halo as soon as Alt+Tab is pressed, even when the VS Code window is
   fully visible on another monitor.
 - Shows the halo when the mouse reaches the taskbar (where the thumbnail
@@ -162,11 +164,13 @@ by a particular top-level window. Workspace Halo therefore has two small parts:
 - The TypeScript extension uses the VS Code API to identify its own workspace,
   select the exact logo, read workspace-scoped settings, and launch one host for
   that VS Code window.
-- The extension and bundled Go/Win32 host use a two-phase focus handshake to
-  select the native window. The host proposes the foreground `Code.exe` HWND;
-  the extension confirms only while its own window is still focused, and the
-  host rechecks the same HWND before binding. A stale proposal is rejected and
-  retried on a fresh focus signal instead of attaching the wrong workspace.
+- The bundled Go/Win32 host first looks for one visible `Code.exe` window whose
+  title contains the exact workspace name. That unambiguous match lets it bind
+  as soon as the extension is ready, even before the window receives input. If
+  the title is customized, missing, or ambiguous, the extension and host fall
+  back to their two-phase focus handshake. The host proposes the foreground
+  `Code.exe` HWND; the extension confirms only while its own window is still
+  focused, and the host rechecks the same HWND before binding.
 - Once bound, the host detects Alt+Tab, double-Shift, focus, and geometric
   occlusion, and renders a child overlay. Making it a child is what lets Windows
   keep the halo with its VS Code window without placing it over unrelated

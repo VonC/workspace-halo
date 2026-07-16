@@ -102,6 +102,26 @@ func TestFocusHandshakeFailsClosedWhenForegroundIsNotVSCode(t *testing.T) {
 	}
 }
 
+func TestWindowTitleMatchesWorkspace(t *testing.T) {
+	tests := []struct {
+		title string
+		name  string
+		want  bool
+	}{
+		{"README.md - workspace-halo - Visual Studio Code", "workspace-halo", true},
+		{"README.md - workspace-halo (Workspace) - Visual Studio Code", "workspace-halo", true},
+		{"workspace-halo - Visual Studio Code", "workspace-halo", true},
+		{"README.md - other - Visual Studio Code", "workspace-halo", false},
+		{"workspace-halo - other - Visual Studio Code", "workspace-halo", false},
+		{"README.md - workspace-halo-tools - Visual Studio Code", "workspace-halo", false},
+	}
+	for _, test := range tests {
+		if got := windowTitleMatchesWorkspace(test.title, test.name); got != test.want {
+			t.Errorf("windowTitleMatchesWorkspace(%q, %q) = %t, want %t", test.title, test.name, got, test.want)
+		}
+	}
+}
+
 func TestParseColor(t *testing.T) {
 	tests := []struct {
 		input string

@@ -137,7 +137,7 @@ class WorkspaceHaloController implements vscode.Disposable {
     if (!unchanged) {
       await this.stopHost();
     }
-    if (vscode.window.state.focused && this.host === undefined) {
+    if (this.host === undefined) {
       await this.startHost(next);
     }
   }
@@ -293,7 +293,7 @@ class WorkspaceHaloController implements vscode.Disposable {
       this.hostReady = false;
       this.hostBound = false;
       this.output.info(`Native host exited (code=${String(code)}, signal=${String(signal)}).`);
-      if (!this.stopping && !this.disposed && vscode.window.state.focused) {
+      if (!this.stopping && !this.disposed) {
         this.scheduleRefresh(1000);
       }
     });

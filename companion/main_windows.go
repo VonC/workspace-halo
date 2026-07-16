@@ -466,6 +466,13 @@ func acquireTarget(cfg config, logger *log.Logger) (uintptr, error) {
 		return target, nil
 	}
 	if cfg.focusHandshake {
+		target, err := uniqueWorkspaceCodeWindow(cfg.name)
+		if err == nil {
+			logger.Printf("identified unique workspace window without focus hwnd=0x%X", target)
+			fmt.Fprintln(os.Stdout, "workspace-halo-bound startup")
+			return target, nil
+		}
+		logger.Printf("startup window identification unavailable: %v", err)
 		fmt.Fprintln(os.Stdout, "workspace-halo-ready")
 		return acquireTargetByFocusHandshake(os.Stdin, os.Stdout, foregroundCodeWindow, logger)
 	}
@@ -557,6 +564,55 @@ func foregroundCodeWindow() (uintptr, error) {
 		return 0, fmt.Errorf("foreground window belongs to %q, not stable VS Code (Code.exe)", path)
 	}
 	return target, nil
+}
+
+type workspaceWindowSearch struct {
+	name    string
+	matches []uintptr
+}
+
+var activeWorkspaceWindowSearch *workspaceWindowSearch
+
+var workspaceCodeWindowEnumProc = syscall.NewCallback(func(hwnd, _ uintptr) uintptr {
+	search := activeWorkspaceWindowSearch
+	if search == nil {
+		return 0
+	}
+	if visible, _, _ := procIsWindowVisible.Call(hwnd); visible == 0 {
+		return 1
+	}
+	path, err := processImagePath(hwnd)
+	if err != nil || !strings.EqualFold(filepath.Base(path), "Code.exe") {
+		return 1
+	}
+	if windowTitleMatchesWorkspace(windowTitle(hwnd), search.name) {
+		search.matches = append(search.matches, hwnd)
+	}
+	return 1
+})
+
+// uniqueWorkspaceCodeWindow identifies the launching VS Code window without
+// requiring focus when its workspace name appears as an exact title segment.
+// Ambiguous and customized titles fail closed into the focus handshake.
+func uniqueWorkspaceCodeWindow(name string) (uintptr, error) {
+	search := &workspaceWindowSearch{name: name}
+	activeWorkspaceWindowSearch = search
+	procEnumWindows.Call(workspaceCodeWindowEnumProc, 0)
+	activeWorkspaceWindowSearch = nil
+	if len(search.matches) != 1 {
+		return 0, fmt.Errorf("workspace title %q matched %d stable VS Code windows", name, len(search.matches))
+	}
+	return search.matches[0], nil
+}
+
+func windowTitleMatchesWorkspace(title, workspaceName string) bool {
+	for _, segment := range []string{workspaceName, workspaceName + " (Workspace)"} {
+		suffix := segment + " - Visual Studio Code"
+		if title == suffix || strings.HasSuffix(title, " - "+suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 func fatalf(format string, values ...any) {
