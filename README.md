@@ -12,6 +12,8 @@ unrelated applications. When minimization begins, the companion briefly restores
 the transition, lets DWM compose the visible child halo, and then replays the
 minimize request.
 
+![Workspace Halo identifying several VS Code workspaces in windows and Alt+Tab](images/screen-workspace-halo.png)
+
 ## Features
 
 - Shows the halo as soon as Alt+Tab is pressed, even when the VS Code window is
