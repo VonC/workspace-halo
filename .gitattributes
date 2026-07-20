@@ -1,0 +1,2 @@
+package-lock.json filter=npm-lock-public
+scripts/npm-lock-smudge.sh text eol=lf

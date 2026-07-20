@@ -115,6 +115,39 @@ if defined HOME (
   if exist "%HOME%\.npmrc" set "NPM_CONFIG_USERCONFIG=%HOME%\.npmrc"
 )
 
+REM Keep package-lock.json portable across public and mirrored npm registries.
+REM Git stores canonical registry.npmjs.org URLs; checkout smudges them back to
+REM the registry selected by npm config for local installs. The helper resolves
+REM that registry dynamically, so no private hostname is persisted in Git config.
+set "PRJ_DIR_UNIX=%PRJ_DIR:\=/%"
+set "EXPECTED_NPM_LOCK_FILTER_VERSION=1"
+set "configured_npm_lock_filter_version="
+set "NPM_LOCK_MIRROR_PATH=/repository/public-npm/"
+for /f "tokens=* delims=" %%i in ('git -C "%PRJ_DIR%" config filter."npm-lock-public".version 2^>nul') do set "configured_npm_lock_filter_version=%%i"
+if not "%configured_npm_lock_filter_version%"=="%EXPECTED_NPM_LOCK_FILTER_VERSION%" (
+  echo INFO: Configuring npm-lock-public Git content filter
+  git -C "%PRJ_DIR%" config filter.npm-lock-public.smudge "bash %PRJ_DIR_UNIX%/scripts/npm-lock-smudge.sh"
+  if errorlevel 1 (
+    echo FATAL: unable to configure the npm-lock-public smudge filter
+    exit /b 1
+  )
+  git -C "%PRJ_DIR%" config filter.npm-lock-public.clean "sed -E 's#https://[^[:space:]]+%NPM_LOCK_MIRROR_PATH%#https://registry.npmjs.org/#g'"
+  if errorlevel 1 (
+    echo FATAL: unable to configure the npm-lock-public clean filter
+    exit /b 1
+  )
+  git -C "%PRJ_DIR%" config filter.npm-lock-public.version "%EXPECTED_NPM_LOCK_FILTER_VERSION%"
+  if errorlevel 1 (
+    echo FATAL: unable to record the npm-lock-public filter version
+    exit /b 1
+  )
+) else (
+  echo INFO: npm-lock-public Git content filter already configured
+)
+set "EXPECTED_NPM_LOCK_FILTER_VERSION="
+set "configured_npm_lock_filter_version="
+set "NPM_LOCK_MIRROR_PATH="
+
 if exist "%PRJ_DIR%\senv.local.bat" (
   REM Can override variables from senv.bat
   echo INFO: Loading local environment variables from '%PRJ_DIR%\senv.local.bat'
@@ -124,6 +157,7 @@ if exist "%PRJ_DIR%\senv.local.bat" (
 REM Set project-specific flag when done.
 REM Next call to senv.bat will be skipped.
 set "NO_MORE_SENV_%PRJ_DIR_NAME%=true "
+set "PRJ_DIR_UNIX="
 
 echo OK: Environment initialized for project '%PRJ_DIR_NAME%'
 
