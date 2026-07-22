@@ -57,9 +57,15 @@ if /i "%~1"=="notest" (
 echo INFO: ----------------------------------------
 echo INFO: Test gate for '%PRJ_DIR_NAME%'
 echo INFO: ----------------------------------------
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test-companion.ps1
+if errorlevel 1 (
+  echo FATAL: the native companion test gate failed, the VSIX is not packaged.
+  goto:build_failed_popd
+)
+
 call npm test
 if errorlevel 1 (
-  echo FATAL: the test gate failed, the VSIX is not packaged.
+  echo FATAL: the TypeScript test gate failed, the VSIX is not packaged.
   goto:build_failed_popd
 )
 
