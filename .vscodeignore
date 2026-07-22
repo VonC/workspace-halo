@@ -9,6 +9,9 @@ build.bat
 companion/**
 docs/poc.md
 esbuild.mjs
+images/logo-windows.png
+images/logo-workspace-halo-transparent.png
+images/screen-workspace-halo.png
 node_modules/**
 out/**
 scripts/**
@@ -17,4 +20,5 @@ senv.local.bat
 src/**
 test/**
 tsconfig.json
+wiki/**
 *.vsix
