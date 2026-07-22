@@ -1,16 +1,29 @@
 # Workspace Halo
 
-Workspace Halo identifies each Visual Studio Code window on Windows 11 with a
-halo: a colored border, the workspace name, and its logo, drawn over the
-window exactly when you need to tell your workspaces apart, and hidden while
-you work.
+<img src="images/logo-windows.png" alt="Windows logo: four blue panes" width="56" align="right">
+
+Workspace Halo identifies each Visual Studio Code window on **Windows 11**
+with a halo: a colored border, the workspace name, and its logo, drawn over
+the window exactly when you need to tell your workspaces apart, and hidden
+while you work. It is a Windows-only extension: the overlay is drawn by a
+Win32 native host.
 
 ![Workspace Halo identifying several VS Code workspaces in windows and Alt+Tab](images/screen-workspace-halo.png)
 
+## Build the VSIX first
+
+Workspace Halo is not published on the Visual Studio Marketplace yet. With
+Node.js 22 or later and Go already on `PATH`, `build.bat` works directly: no
+need to install senv first. Without them, the portable
+[senv](https://github.com/VonC/setupsenv) toolchain provides both:
+`dwl node 22`, `inst node 22`, then the project `senv.bat`. The details are
+in the wiki: [set up the build toolchain](wiki/how-to/set-up-the-build-toolchain.md)
+and [build and package the VSIX](wiki/how-to/build-and-package-the-vsix.md).
+
 ## Two files give a workspace its halo
 
-Install `workspace-halo-win32-x64.vsix` (Extensions view, `...` menu,
-**Install from VSIX...**), then, in a folder named `my-project`:
+Install the built `workspace-halo-win32-x64.vsix` (Extensions view, `...`
+menu, **Install from VSIX...**), then, in a folder named `my-project`:
 
 1. Save the workspace as `.vscode\my-project.code-workspace`
    (**File > Save Workspace As...**): the workspace is now named after its
@@ -53,7 +66,7 @@ window. Otherwise `workspaceHalo.color` applies.
 ## Everything else is in the wiki
 
 Configuration and styling, differently named root folders, troubleshooting,
-building, and the inner workings are documented in the
+building, publishing and signing, and the inner workings are documented in the
 [wiki](wiki/README.md), organized on the [Diátaxis](https://diataxis.fr/)
 model: [explanation](wiki/README.md#-explanation),
 [tutorials](wiki/README.md#-tutorials),
