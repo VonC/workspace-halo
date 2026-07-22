@@ -4,10 +4,14 @@
   "description": "Identify VS Code workspace windows with a configurable Alt+Tab halo.",
   "version": "0.0.19",
   "publisher": "vonc",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/VonC/workspace-halo.git"
+  },
+  "homepage": "https://github.com/VonC/workspace-halo#readme",
+  "bugs": {
+    "url": "https://github.com/VonC/workspace-halo/issues"
   },
   "icon": "images/logo-workspace-halo.png",
   "engines": {
