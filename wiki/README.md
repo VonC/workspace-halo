@@ -41,7 +41,10 @@ Recipes for one precise goal each, for readers who already know the basics.
 - [Accept a differently named root folder](how-to/accept-a-differently-named-root-folder.md)
 - [Troubleshoot a missing halo](how-to/troubleshoot-a-missing-halo.md)
 - [Install or update the extension](how-to/install-or-update-the-extension.md)
+- [Set up the build toolchain](how-to/set-up-the-build-toolchain.md)
 - [Build and package the VSIX](how-to/build-and-package-the-vsix.md)
+- [Publish to the Visual Studio Marketplace](how-to/publish-to-the-marketplace.md)
+- [Sign the native host for free](how-to/sign-the-native-host-for-free.md)
 
 ## 📖 Reference
 

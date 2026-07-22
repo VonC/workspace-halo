@@ -1,9 +1,12 @@
 # Install or update the extension
 
 Goal: install the packaged `workspace-halo-win32-x64.vsix` into VS Code, or
-replace an already installed version with a rebuilt one. The VSIX contains
-the compiled extension and the Windows x64 native host; end users need
-neither Go nor Node.js.
+replace an already installed version with a rebuilt one. The extension is not
+published on the Visual Studio Marketplace yet, so the VSIX comes from a
+build of this repository (see
+[build and package the VSIX](build-and-package-the-vsix.md)). The file
+contains the compiled extension and the Windows x64 native host; whoever
+installs it needs neither Go nor Node.js.
 
 ## Install from the Extensions view
 

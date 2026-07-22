@@ -1,7 +1,11 @@
 # Build and package the VSIX
 
 Goal: produce `workspace-halo-win32-x64.vsix` from the source tree.
-Development requires Go, Node.js, and PowerShell, but not Visual Studio.
+Development requires Go, Node.js 22 or later, and PowerShell, but not Visual
+Studio. When Node and Go are already on `PATH`, `build.bat` works directly
+and no senv install is needed; both that setup and the portable senv
+toolchain are covered in
+[set up the build toolchain](set-up-the-build-toolchain.md).
 
 ## Run the full build
 
@@ -38,8 +42,11 @@ The npm script names behind the build are listed in
 
 The same platform-specific VSIX can be shared directly inside an
 organization, or uploaded as a Windows x64 target when publishing through the
-VS Code Marketplace. A corporate release should build on a trusted Windows
-runner, Authenticode-sign `workspace-halo-host.exe` when endpoint policy
-requires signed binaries, package the VSIX, and retain build logs and
-checksums. Installation of the packaged file is covered in
+VS Code Marketplace, as described in
+[publish to the Marketplace](publish-to-the-marketplace.md). A corporate
+release should build on a trusted Windows runner, Authenticode-sign
+`workspace-halo-host.exe` when endpoint policy requires signed binaries (see
+[sign the native host for free](sign-the-native-host-for-free.md)), package
+the VSIX, and retain build logs and checksums. Installation of the packaged
+file is covered in
 [install or update the extension](install-or-update-the-extension.md).

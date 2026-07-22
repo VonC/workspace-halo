@@ -8,7 +8,9 @@ trigger and know where the extension logs what it does.
 
 - Windows 11 with stable desktop VS Code (`Code.exe`; Insiders and web VS
   Code are not supported).
-- The `workspace-halo-win32-x64.vsix` file, installed as described in
+- The `workspace-halo-win32-x64.vsix` file, built from this repository (see
+  [build and package the VSIX](../how-to/build-and-package-the-vsix.md)) and
+  installed as described in
   [install or update the extension](../how-to/install-or-update-the-extension.md).
 - Any square-ish PNG image to use as a logo.
 
