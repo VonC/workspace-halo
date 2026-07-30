@@ -10,11 +10,17 @@ Win32 native host.
 
 ![Workspace Halo identifying several VS Code workspaces in windows and Alt+Tab](images/screen-workspace-halo.png)
 
-## Build the VSIX first
+## Install from the Marketplace
 
-Workspace Halo is not published on the Visual Studio Marketplace yet. With
-Node.js 22 or later and Go already on `PATH`, `build.bat` works directly: no
-need to install senv first. Without them, the portable
+Workspace Halo is published on the
+[Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=vonc.workspace-halo):
+search "Workspace Halo" in the Extensions view, or run
+`code --install-extension vonc.workspace-halo`. Only Windows x64 VS Code
+sees the listing, which matches what the extension supports.
+
+Building locally stays available for development or audit. With Node.js 22
+or later and Go already on `PATH`, `build.bat` works directly: no need to
+install senv first. Without them, the portable
 [senv](https://github.com/VonC/setupsenv) toolchain provides both:
 `dwl node 22`, `inst node 22`, then the project `senv.bat`. The details are
 in the wiki: [set up the build toolchain](wiki/how-to/set-up-the-build-toolchain.md)
@@ -22,8 +28,9 @@ and [build and package the VSIX](wiki/how-to/build-and-package-the-vsix.md).
 
 ## Two files give a workspace its halo
 
-Install the built `workspace-halo-win32-x64.vsix` (Extensions view, `...`
-menu, **Install from VSIX...**), then, in a folder named `my-project`:
+Once the extension is installed (from the Marketplace, or a locally built
+`workspace-halo-win32-x64.vsix` via **Install from VSIX...**), in a folder
+named `my-project`:
 
 1. Save the workspace as `.vscode\my-project.code-workspace`
    (**File > Save Workspace As...**): the workspace is now named after its
