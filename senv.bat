@@ -14,6 +14,8 @@ REM First script to be called to setup the environment for the project.
 REM   senv.bat     apply the environment (skipped when already applied)
 REM   fsenv        clear the guard and apply it again (doskey alias)
 REM   i             run install.bat (doskey alias)
+REM   cdp           cd back to the project root (doskey alias)
+REM   pwiki         serve wiki\ as a local website via ..\llm-shared (doskey alias)
 REM
 REM Node: selected with 'switchnode 22' when that launcher is on PATH
 REM (it picks the latest node22 in %PRGS%\nodes). Without switchnode, any
@@ -37,6 +39,18 @@ REM run skipped by the guard (fresh VSCode console inheriting the variable)
 REM installs them. fsenv clears the guard and forces this senv to run again.
 doskey fsenv=set "NO_MORE_SENV_%PRJ_DIR_NAME%=" ^& "%~f0" force $*
 doskey i=call "%PRJ_DIR%\install.bat" $*
+doskey cdp=cd /d "%PRJ_DIR%"
+
+REM Shared tooling lives in the sibling llm-shared checkout. Resolve it here
+REM so pwiki works even when llm-shared's own senv never ran in this console.
+for %%i in ("%~dp0..\llm-shared") do set "LLM_SHARED_DIR=%%~fi"
+REM pwiki goes through the mds.ps1 launcher, not a bare 'python': this senv
+REM puts no Python on PATH (Node/Go project) and the launcher self-locates
+REM llm-shared's bundled venv Python. PowerShell also stops on Ctrl-C without
+REM cmd's "Terminate batch job (Y/N)?" question. The wiki's serve_docs.ini
+REM mounts docs\poc.md next to the pages (the root README cannot be mounted:
+REM it would collide with wiki\README.md, which becomes the site index).
+doskey pwiki=powershell -ExecutionPolicy Bypass -File "%LLM_SHARED_DIR%\bin\mds.ps1" "%PRJ_DIR%\wiki" $*$tif not errorlevel 1 echo %PRJ_DIR_NAME%: wiki server stopped
 
 REM The guard variable is inherited by child processes (a VSCode terminal
 REM opened from an activated shell), while PATH changes may have been undone
