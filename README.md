@@ -10,32 +10,20 @@ Win32 native host.
 
 ![Workspace Halo identifying several VS Code workspaces in windows and Alt+Tab](images/screen-workspace-halo.png)
 
-## Install from the Marketplace
+## Give your workspace its halo
 
-Workspace Halo is published on the
-[Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=vonc.workspace-halo):
-search "Workspace Halo" in the Extensions view, or run
-`code --install-extension vonc.workspace-halo`. Only Windows x64 VS Code
-sees the listing, which matches what the extension supports.
-
-Building locally stays available for development or audit. With Node.js 22
-or later and Go already on `PATH`, `build.bat` works directly: no need to
-install senv first. Without them, the portable
-[senv](https://github.com/VonC/setupsenv) toolchain provides both:
-`dwl node 22`, `inst node 22`, then the project `senv.bat`. The details are
-in the wiki: [set up the build toolchain](wiki/how-to/set-up-the-build-toolchain.md)
-and [build and package the VSIX](wiki/how-to/build-and-package-the-vsix.md).
-
-## Two files give a workspace its halo
-
-Once the extension is installed (from the Marketplace, or a locally built
-`workspace-halo-win32-x64.vsix` via **Install from VSIX...**), in a folder
-named `my-project`:
+Install
+[Workspace Halo from the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=vonc.workspace-halo)
+from the Extensions view, or run
+`code --install-extension vonc.workspace-halo`. Then give each project two
+files whose names match the project folder exactly. In a folder named
+`my-project`:
 
 1. Save the workspace as `.vscode\my-project.code-workspace`
    (**File > Save Workspace As...**): the workspace is now named after its
    folder.
-2. Add its logo as `.vscode\my-project.logo.png`, named after the workspace.
+2. Add a PNG logo as `.vscode\my-project.logo.png`, also named after the
+   workspace.
 
 ```text
 my-project/
@@ -44,9 +32,31 @@ my-project/
     `-- my-project.logo.png
 ```
 
-When both files exist (names match exactly, case included), the halo is
-active for that window. Nothing else is required; without them the extension
-stays completely inert.
+These are the two conditions for the halo effect. Their names must match the
+project folder exactly, including case. When either file is missing, Workspace
+Halo stays completely inert for that window.
+
+Need a project logo? Clone
+[llm-shared](https://github.com/VonC/llm-shared) and use its `/isolate-logos`
+skill with an AI-generated logo or logo sheet. Its
+"[project logo prompt template](https://github.com/VonC/llm-shared/blob/main/wiki/reference/project-logo-prompt-template.md)" wiki page
+explains how to prompt for a coherent project logo. For a single image, the
+skill's one-cell workflow produces a clean, square PNG that you can save as
+`.vscode\my-project.logo.png`.
+
+## Build from a local clone
+
+You only need to build Workspace Halo when developing it or installing from a
+local clone. With Node.js 22 or later and Go already on `PATH`, `build.bat`
+works directly; there is no need to install senv first. Without them, the
+portable [senv](https://github.com/VonC/setupsenv) toolchain provides both:
+`dwl node 22`, `inst node 22`, then the project `senv.bat`.
+
+The details are in the wiki: [set up the build toolchain](wiki/how-to/set-up-the-build-toolchain.md)
+and [build and package the VSIX](wiki/how-to/build-and-package-the-vsix.md).
+Install the resulting `workspace-halo-win32-x64.vsix` by pressing
+**Ctrl+Shift+P** to open VS Code's Command Palette, then running the
+**Extensions: Install from VSIX...** command.
 
 ## When the halo appears
 

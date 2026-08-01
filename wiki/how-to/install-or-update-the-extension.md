@@ -8,9 +8,10 @@ needs neither Go nor Node.js.
 
 ## Install from the Marketplace
 
-The extension is published at
-<https://marketplace.visualstudio.com/items?itemName=vonc.workspace-halo>.
-Search "Workspace Halo" in the Extensions view and install, or run:
+Open
+[Workspace Halo on the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=vonc.workspace-halo)
+and choose **Install**, search for `Workspace Halo` in the Extensions view, or
+run:
 
 ```bat
 code --install-extension vonc.workspace-halo
@@ -20,16 +21,18 @@ Only Windows x64 VS Code sees the listing (the published target is
 `win32-x64`), and VS Code keeps Marketplace extensions updated
 automatically.
 
-## Install a local build from the Extensions view
+## Install a locally built VSIX
 
-The VSIX comes from a build of this repository (see
-[build and package the VSIX](build-and-package-the-vsix.md)).
+Build `workspace-halo-win32-x64.vsix` from the repository first, as described
+in [build and package the VSIX](build-and-package-the-vsix.md). Then:
 
-1. Open the Extensions view in VS Code.
-2. Open the `...` menu and choose **Install from VSIX...**.
+1. Press **Ctrl+Shift+P** to open VS Code's Command Palette.
+2. Run the **Extensions: Install from VSIX...** command.
 3. Select `workspace-halo-win32-x64.vsix` and reload VS Code if requested.
 
-## Install a local build from the command line
+### Install from the command line
+
+To install or replace the local build from the command line, run:
 
 ```bat
 code --install-extension .\workspace-halo-win32-x64.vsix --force
@@ -38,7 +41,7 @@ code --install-extension .\workspace-halo-win32-x64.vsix --force
 `--force` replaces an installed copy even when the version number did not
 change, which is exactly what a rebuilt VSIX needs.
 
-## Install from the source tree
+### Install from the source tree
 
 From the repository root, after building (see
 [build and package the VSIX](build-and-package-the-vsix.md)):
@@ -54,6 +57,9 @@ installation. Once `senv.bat` has initialized the project command prompt, the
 
 ## Mind the unsigned host executable
 
-The bundled `workspace-halo-host.exe` is currently unsigned. If your endpoint
-policy requires signed binaries, Authenticode-sign the executable before
-packaging, as noted in the packaging guide.
+The bundled `workspace-halo-host.exe` is currently unsigned. It runs without
+issue on the maintainer's corporate laptop, but that does not guarantee that
+Smart App Control or another managed endpoint policy will allow it everywhere.
+The distinction between the Marketplace package signature and executable
+Authenticode signing, along with the release-build ordering requirement, is
+covered in [sign the native host for free](sign-the-native-host-for-free.md).

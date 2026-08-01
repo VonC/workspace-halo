@@ -8,11 +8,17 @@ trigger and know where the extension logs what it does.
 
 - Windows 11 with stable desktop VS Code (`Code.exe`; Insiders and web VS
   Code are not supported).
-- The extension installed, from the
-  [Marketplace](https://marketplace.visualstudio.com/items?itemName=vonc.workspace-halo)
-  or from a locally built VSIX, as described in
+- Workspace Halo installed from the
+  [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=vonc.workspace-halo).
+  Contributors can instead build and install the local VSIX as described in
   [install or update the extension](../how-to/install-or-update-the-extension.md).
 - Any square-ish PNG image to use as a logo.
+
+If you need a logo, clone [llm-shared](https://github.com/VonC/llm-shared),
+use its
+[project logo prompt template](https://github.com/VonC/llm-shared/blob/main/wiki/reference/project-logo-prompt-template.md),
+then use the `/isolate-logos` skill to produce a clean, square PNG from the
+generated image or logo sheet.
 
 ## Step 1 - Create and save the workspace
 
