@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.0.20
+
 - Restrict halo display to extension activation, real window overlap, Alt+Tab,
   mouse taskbar hovering, double-Shift, and minimized-window thumbnail
   composition; remove Task View and shell-flyout-only display paths.
@@ -14,6 +16,9 @@
 - Ignore every Workspace Halo overlay during occlusion checks, preventing
   relocated VS Code windows from triggering one another indefinitely when a
   multi-monitor desktop is consolidated onto one monitor.
+- Detect Windows' Duplicate (clone) display topology and suspend ambient
+  overlap halos there, preventing Halo overlays from cycling overlapping VS
+  Code windows through the foreground after Win+P.
 
 ## 0.0.19
 
