@@ -12,6 +12,7 @@ import (
 	"math"
 	"strings"
 	"testing"
+	"unsafe"
 )
 
 func TestFocusHandshakeRejectsWindowSwitchBeforeConfirmation(t *testing.T) {
@@ -309,6 +310,30 @@ func TestHaloOverlayNeverCountsAsOcclusion(t *testing.T) {
 	}
 	if isIgnoredOccludingClass("Chrome_WidgetWin_1") {
 		t.Fatal("a VS Code window was incorrectly ignored as an occluder")
+	}
+}
+
+func TestDuplicateDisplayTopologySuppressesAmbientOcclusion(t *testing.T) {
+	if shouldCheckOcclusion(false, false, true, false, displayConfigTopologyClone) {
+		t.Fatal("Duplicate display mode can trigger the overlapping-window z-order loop")
+	}
+	if !shouldCheckOcclusion(false, false, true, false, 0x00000004) {
+		t.Fatal("Extend display mode incorrectly suppresses ambient occlusion")
+	}
+	if shouldCheckOcclusion(false, false, true, true, 0x00000004) {
+		t.Fatal("ambient occlusion ran while display topology was changing")
+	}
+}
+
+func TestDisplayConfigInteropStructureSizes(t *testing.T) {
+	if got := unsafe.Sizeof(displayConfigPathInfo{}); got != 68 {
+		t.Fatalf("DISPLAYCONFIG_PATH_INFO size = %d, want 68", got)
+	}
+	if got := unsafe.Sizeof(displayConfigModeInfo{}); got != 64 {
+		t.Fatalf("DISPLAYCONFIG_MODE_INFO size = %d, want 64", got)
+	}
+	if got := unsafe.Alignof(displayConfigModeInfo{}); got != 8 {
+		t.Fatalf("DISPLAYCONFIG_MODE_INFO alignment = %d, want 8", got)
 	}
 }
 

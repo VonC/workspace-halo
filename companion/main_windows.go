@@ -37,6 +37,7 @@ const (
 	wmEraseBkgnd    = uint32(0x0014)
 	wmNCHitTest     = uint32(0x0084)
 	wmMouseActivate = uint32(0x0021)
+	wmDisplayChange = uint32(0x007E)
 	wmTimer         = uint32(0x0113)
 
 	htTransparent = ^uintptr(0)
@@ -91,6 +92,12 @@ const (
 	objidWindow              = int32(0)
 	childidSelf              = int32(0)
 	wineventOutofcontext     = uint32(0x0000)
+
+	qdcDatabaseCurrent         = uint32(0x00000004)
+	displayConfigTopologyClone = uint32(0x00000002)
+	errorInsufficientBuffer    = uint32(122)
+	displayConfigQueryAttempts = 3
+	displayTopologyRetryMS     = uint64(1000)
 )
 
 var (
@@ -136,6 +143,8 @@ var (
 	procSetProcessDpiAwarenessContext = user32.NewProc("SetProcessDpiAwarenessContext")
 	procSetWinEventHook               = user32.NewProc("SetWinEventHook")
 	procUnhookWinEvent                = user32.NewProc("UnhookWinEvent")
+	procGetDisplayConfigBufferSizes   = user32.NewProc("GetDisplayConfigBufferSizes")
+	procQueryDisplayConfig            = user32.NewProc("QueryDisplayConfig")
 
 	procCreateCompatibleDC    = gdi32.NewProc("CreateCompatibleDC")
 	procDeleteDC              = gdi32.NewProc("DeleteDC")
@@ -251,6 +260,46 @@ type bitmapInfo struct {
 type blendFunction struct{ BlendOp, BlendFlags, SourceConstantAlpha, AlphaFormat byte }
 type lastInputInfo struct{ CbSize, DwTime uint32 }
 
+// Only the sizes and alignment of these CCD structures matter here: Halo asks
+// QueryDisplayConfig for the topology identifier and does not inspect paths or
+// modes. The fields mirror DISPLAYCONFIG_PATH_INFO and DISPLAYCONFIG_MODE_INFO.
+type displayConfigLUID struct {
+	LowPart  uint32
+	HighPart int32
+}
+
+type displayConfigPathSourceInfo struct {
+	AdapterID   displayConfigLUID
+	ID          uint32
+	ModeInfoIdx uint32
+	StatusFlags uint32
+}
+
+type displayConfigPathTargetInfo struct {
+	AdapterID        displayConfigLUID
+	ID               uint32
+	ModeInfoIdx      uint32
+	OutputTechnology uint32
+	Rotation         uint32
+	Scaling          uint32
+	RefreshRate      [2]uint32
+	ScanLineOrdering uint32
+	TargetAvailable  int32
+	StatusFlags      uint32
+}
+
+type displayConfigPathInfo struct {
+	SourceInfo displayConfigPathSourceInfo
+	TargetInfo displayConfigPathTargetInfo
+}
+
+type displayConfigModeInfo struct {
+	InfoType  uint32
+	ID        uint32
+	AdapterID displayConfigLUID
+	Mode      [6]uint64
+}
+
 type config struct {
 	name           string
 	logo           image.Image
@@ -294,6 +343,10 @@ type application struct {
 	shiftDown         bool
 	lastShiftRelease  uint64
 	lastManualInput   uint32
+	displayTopology   uint32
+	topologyKnown     bool
+	topologyDirty     bool
+	topologyRetryAt   uint64
 	logger            *log.Logger
 	logFile           *os.File
 }
@@ -334,6 +387,9 @@ func main() {
 		logFile:           logFile,
 	}
 	activeApp = app
+	if err := app.refreshDisplayTopology(); err != nil {
+		logger.Printf("initial display topology query failed: %v", err)
+	}
 	if err := app.createOverlay(); err != nil {
 		fatalf("create overlay: %v", err)
 	}
@@ -704,6 +760,14 @@ func (a *application) createOverlay() error {
 
 func windowProc(hwnd uintptr, message uint32, wParam, lParam uintptr) uintptr {
 	switch message {
+	case wmDisplayChange:
+		if activeApp != nil {
+			// Query on the next timer tick, after Windows has finished
+			// applying every path involved in the Win+P transition.
+			activeApp.topologyDirty = true
+			activeApp.topologyRetryAt = 0
+		}
+		return 0
 	case wmTimer:
 		if activeApp != nil {
 			if err := activeApp.tick(); err != nil {
@@ -895,7 +959,19 @@ func (a *application) tick() error {
 		procPostMessageW.Call(a.overlay, uintptr(wmClose), 0, 0)
 		return nil
 	}
-	a.replayPendingMinimize(getTickCount64())
+	now := getTickCount64()
+	a.replayPendingMinimize(now)
+	if a.topologyDirty && now >= a.topologyRetryAt {
+		if err := a.refreshDisplayTopology(); err != nil {
+			// Suppress ambient occlusion while topology is unsettled. A later
+			// tick retries, so a transient CCD race does not disable it forever.
+			a.topologyRetryAt = now + displayTopologyRetryMS
+			a.logger.Printf("display topology refresh failed: %v", err)
+		} else {
+			a.topologyDirty = false
+			a.topologyRetryAt = 0
+		}
+	}
 
 	focused := foregroundWindow() == a.target
 	pointerDown := false
@@ -918,7 +994,13 @@ func (a *application) tick() error {
 	minimized, _, _ := procIsIconic.Call(a.target)
 	visible, _, _ := procIsWindowVisible.Call(a.target)
 	occluded := false
-	if !focused && minimized == 0 && visible != 0 {
+	if shouldCheckOcclusion(
+		focused,
+		minimized != 0,
+		visible != 0,
+		a.topologyDirty,
+		a.displayTopology,
+	) {
 		occluded = a.hasOccludingWindow()
 	}
 
@@ -948,6 +1030,81 @@ func (a *application) tick() error {
 		a.visibilityReason = reason
 	}
 	return nil
+}
+
+func shouldCheckOcclusion(focused, minimized, visible, topologyPending bool, topology uint32) bool {
+	return !focused &&
+		!minimized &&
+		visible &&
+		!topologyPending &&
+		topology != displayConfigTopologyClone
+}
+
+func (a *application) refreshDisplayTopology() error {
+	topology, err := currentDisplayTopology()
+	if err != nil {
+		return err
+	}
+	changed := !a.topologyKnown || topology != a.displayTopology
+	a.displayTopology = topology
+	a.topologyKnown = true
+	if changed {
+		a.logger.Printf("display topology=%s", displayTopologyName(topology))
+	}
+	return nil
+}
+
+func displayTopologyName(topology uint32) string {
+	switch topology {
+	case 0x00000001:
+		return "internal"
+	case displayConfigTopologyClone:
+		return "clone"
+	case 0x00000004:
+		return "extend"
+	case 0x00000008:
+		return "external"
+	default:
+		return fmt.Sprintf("unknown(0x%X)", topology)
+	}
+}
+
+// currentDisplayTopology reads the topology selected by Win+P from Windows'
+// persisted display database. Buffer sizing and querying can race with a
+// topology transition, so retry the documented insufficient-buffer result.
+func currentDisplayTopology() (uint32, error) {
+	for attempt := 0; attempt < displayConfigQueryAttempts; attempt++ {
+		var pathCount, modeCount uint32
+		result, _, _ := procGetDisplayConfigBufferSizes.Call(
+			uintptr(qdcDatabaseCurrent),
+			uintptr(unsafe.Pointer(&pathCount)),
+			uintptr(unsafe.Pointer(&modeCount)),
+		)
+		if code := uint32(result); code != 0 {
+			return 0, fmt.Errorf("GetDisplayConfigBufferSizes: %w", syscall.Errno(code))
+		}
+		// The pointers are required even if the persistence database has not
+		// materialized mode records for the current set of connected displays.
+		paths := make([]displayConfigPathInfo, max(pathCount, 1))
+		modes := make([]displayConfigModeInfo, max(modeCount, 1))
+		var topology uint32
+		result, _, _ = procQueryDisplayConfig.Call(
+			uintptr(qdcDatabaseCurrent),
+			uintptr(unsafe.Pointer(&pathCount)),
+			uintptr(unsafe.Pointer(&paths[0])),
+			uintptr(unsafe.Pointer(&modeCount)),
+			uintptr(unsafe.Pointer(&modes[0])),
+			uintptr(unsafe.Pointer(&topology)),
+		)
+		code := uint32(result)
+		if code == 0 {
+			return topology, nil
+		}
+		if code != errorInsufficientBuffer {
+			return 0, fmt.Errorf("QueryDisplayConfig: %w", syscall.Errno(code))
+		}
+	}
+	return 0, errors.New("display configuration kept changing while it was queried")
 }
 
 func shouldDismissActivation(activationVisible, focused, wasFocused, pointerDown bool) bool {

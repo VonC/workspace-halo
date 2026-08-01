@@ -21,6 +21,9 @@ changes.
 Because `focused` ranks above `occluded`, a focused window never shows an
 overlap halo; the reasoning is in
 [why the halo shows only on triggers](../explanation/why-the-halo-shows-only-on-triggers.md).
+The `occluded` trigger is also suspended while Windows reports the Win+P
+**Duplicate** (clone) topology. Other explicit triggers remain available in
+that mode.
 
 ## Occlusion detection details
 
