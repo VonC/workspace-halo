@@ -1,9 +1,11 @@
 # Publish to the Visual Studio Marketplace
 
-Goal: turn the locally built `workspace-halo-win32-x64.vsix` into the public
-Marketplace listing under the `vonc` publisher. The whole loop runs in a
-browser with a plain Microsoft account: no Azure subscription, no Azure
-DevOps organization, and no Personal Access Token.
+Goal: publish a locally built `workspace-halo-win32-x64.vsix` as a new version
+of the existing public Marketplace listing under the `vonc` publisher. The
+Marketplace is the normal installation route, so an update reaches installed
+copies and new users without requiring them to handle a VSIX. The release loop
+runs in a browser with a plain Microsoft account: no Azure subscription, Azure
+DevOps organization, or Personal Access Token.
 
 ## Create the publisher once
 
@@ -36,7 +38,7 @@ personal account:
 Manual upload needs none of that. Revisit automation only if releases become
 frequent, and then through Entra ID rather than a PAT.
 
-## Check the manifest before the first publish
+## Check the manifest before publishing
 
 The Marketplace page is generated from the repository: `package.json` already
 carries the `publisher`, `displayName`, `description`, `repository`,
@@ -52,10 +54,12 @@ npx vsce ls
 
 ## Sign before you ship
 
-The Marketplace signs the VSIX container itself and VS Code verifies that
-signature at install time. The bundled `workspace-halo-host.exe` is a
-separate concern: Windows endpoint trust wants an Authenticode signature on
-the executable. Sign it before packaging, as described in
+The Marketplace signs the extension package and VS Code verifies its source
+and integrity at install time. That package signature does not Authenticode-sign
+the bundled `workspace-halo-host.exe`. The unsigned host works on the
+maintainer's corporate laptop, but Smart App Control or managed endpoint policy
+can block it elsewhere. Sign it as part of the final packaging lifecycle, as
+described in
 [sign the native host for free](sign-the-native-host-for-free.md).
 
 ## Publish the platform-specific VSIX
