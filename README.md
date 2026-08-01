@@ -1,6 +1,6 @@
 # Workspace Halo
 
-<img src="images/logo-windows.png" alt="Windows logo: four blue panes" width="56" align="right">
+![Windows logo: four blue panes](images/logo-windows.png)
 
 Workspace Halo identifies each Visual Studio Code window on **Windows 11**
 with a halo: a colored border, the workspace name, and its logo, drawn over
