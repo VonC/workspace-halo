@@ -1,6 +1,6 @@
 # Build and package the VSIX
 
-Goal: produce `workspace-halo-win32-x64.vsix` from the source tree.
+Goal: produce `workspace-halo-<version>-win32-x64.vsix` from the source tree.
 Development requires Go, Node.js 22 or later, and PowerShell, but not Visual
 Studio. When Node and Go are already on `PATH`, `build.bat` works directly
 and no senv install is needed; both that setup and the portable senv

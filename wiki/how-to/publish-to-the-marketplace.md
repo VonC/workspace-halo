@@ -1,10 +1,11 @@
 # Publish to the Visual Studio Marketplace
 
-Goal: publish a locally built `workspace-halo-win32-x64.vsix` as a new version
-of the existing public Marketplace listing under the `vonc` publisher. The
-Marketplace is the normal installation route, so an update reaches installed
-copies and new users without requiring them to handle a VSIX. The release loop
-runs in a browser with a plain Microsoft account: no Azure subscription, Azure
+Goal: publish a locally built `workspace-halo-<version>-win32-x64.vsix` as a
+new version of the existing public Marketplace listing under the `vonc`
+publisher. The Marketplace is the normal installation route, so an update
+reaches installed copies and new users without requiring them to handle a VSIX.
+The release loop runs in a browser with a plain Microsoft account: no Azure
+subscription, Azure
 DevOps organization, or Personal Access Token.
 
 ## Create the publisher once
@@ -69,7 +70,7 @@ one. Build with `build.bat`, then upload from the browser on the
 [management page](https://marketplace.visualstudio.com/manage):
 
 - First publish: **New extension > Visual Studio Code**, drop
-  `workspace-halo-win32-x64.vsix`.
+  `workspace-halo-<version>-win32-x64.vsix`.
 - Later releases: the **...** menu on the Workspace Halo row > **Update**,
   same file.
 

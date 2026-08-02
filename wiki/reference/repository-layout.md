@@ -25,7 +25,7 @@ The source tree of the extension, its native host, and their build scripts.
 | `build.bat` | Full build: environment, dependencies, test gate, VSIX packaging; `build.bat notest` skips the gate |
 | `install.bat` | Installs the packaged VSIX into `%PRGS%\vscodes\current` with `--force`; the `i` doskey alias runs it |
 | `senv.bat` | Initializes the project command prompt and its doskey aliases |
-| `workspace-halo-win32-x64.vsix` | The packaged platform-specific extension |
+| `workspace-halo-<version>-win32-x64.vsix` | The packaged platform-specific extension |
 
 ## npm scripts
 

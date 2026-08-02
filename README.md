@@ -54,7 +54,7 @@ portable [senv](https://github.com/VonC/setupsenv) toolchain provides both:
 
 The details are in the wiki: [set up the build toolchain](wiki/how-to/set-up-the-build-toolchain.md)
 and [build and package the VSIX](wiki/how-to/build-and-package-the-vsix.md).
-Install the resulting `workspace-halo-win32-x64.vsix` by pressing
+Install the resulting `workspace-halo-<version>-win32-x64.vsix` by pressing
 **Ctrl+Shift+P** to open VS Code's Command Palette, then running the
 **Extensions: Install from VSIX...** command.
 

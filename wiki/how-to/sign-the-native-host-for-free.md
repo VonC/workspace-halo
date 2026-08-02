@@ -7,7 +7,8 @@ publishers, but an unsigned host is not universally blocked.
 
 ## Understand what is signed
 
-The packaged `workspace-halo-win32-x64.vsix` does contain the native host at:
+The packaged `workspace-halo-<version>-win32-x64.vsix` does contain the native
+host at:
 
 ```text
 extension/bin/win32-x64/workspace-halo-host.exe
