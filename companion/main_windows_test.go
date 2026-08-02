@@ -373,17 +373,23 @@ func TestTaskbarThumbnailClassRecognition(t *testing.T) {
 
 func TestTaskbarThumbnailHoverRetainsHalosOutsideDuplicateMode(t *testing.T) {
 	const extendTopology = uint32(0x00000004)
-	if !taskbarHoverState(false, true, false, extendTopology) {
+	if !taskbarHoverState(true, false, true, false, extendTopology) {
 		t.Fatal("thumbnail hover did not retain halos in Extend mode")
 	}
-	if taskbarHoverState(false, true, false, displayConfigTopologyClone) {
+	if taskbarHoverState(true, false, true, false, displayConfigTopologyClone) {
 		t.Fatal("thumbnail hover bypassed Duplicate-mode protection")
 	}
-	if taskbarHoverState(false, true, true, extendTopology) {
+	if taskbarHoverState(true, false, true, true, extendTopology) {
 		t.Fatal("thumbnail hover ran while display topology was changing")
 	}
-	if !taskbarHoverState(true, false, true, displayConfigTopologyClone) {
+	if !taskbarHoverState(false, true, false, true, displayConfigTopologyClone) {
 		t.Fatal("direct taskbar hover was suppressed during a topology transition")
+	}
+	if taskbarHoverState(false, false, true, false, extendTopology) {
+		t.Fatal("an independently visible shell flyout started taskbar hover")
+	}
+	if taskbarHoverState(true, false, false, false, extendTopology) {
+		t.Fatal("taskbar hover remained active after the thumbnail flyout closed")
 	}
 }
 
