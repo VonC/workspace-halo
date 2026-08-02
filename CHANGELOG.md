@@ -9,6 +9,9 @@
 - Limit thumbnail-hover detection to visible, uncloaked Explorer-owned Windows
   11 and classic thumbnail surfaces, excluding Task View and retaining the
   existing Duplicate-mode and topology-transition protections.
+- Stamp every VSIX with its Git commit and dirty state, include the same data
+  inside the package and native host, and reject provenance mismatches before
+  reporting a successful build.
 
 ## 0.0.20
 

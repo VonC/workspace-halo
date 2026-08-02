@@ -1,6 +1,7 @@
 # Build and package the VSIX
 
-Goal: produce `workspace-halo-<version>-win32-x64.vsix` from the source tree.
+Goal: produce a provenance-checked
+`workspace-halo-<version>-<commit>[-dirty]-win32-x64.vsix` from the source tree.
 Development requires Go, Node.js 22 or later, and PowerShell, but not Visual
 Studio. When Node and Go are already on `PATH`, `build.bat` works directly
 and no senv install is needed; both that setup and the portable senv
@@ -21,11 +22,21 @@ The script chains, and stops at the first failure:
 2. `npm ci` installs the locked dependencies when `node_modules` is missing.
 3. The test gate runs `scripts\test-companion.ps1` (the Go tests of the
    native host) then `npm test` (type check plus the TypeScript tests).
-4. `npm run package:vsix` compiles the Go host to
+4. `npm run package:vsix` compiles the VCS-stamped Go host to
    `bin\win32-x64\workspace-halo-host.exe`, bundles the extension to
-   `dist\extension.js`, and packages the VSIX with `@vscode/vsce`.
+   `dist\extension.js`, writes `dist\build-provenance.json`, and packages the
+   VSIX with `@vscode/vsce`.
+5. `scripts\verify-vsix-provenance.ps1` checks the filename, package and VSIX
+   versions, provenance JSON, target platform, and native host VCS stamp, then
+   prints the artifact SHA-256.
 
-`build.bat notest` skips the test gate and goes straight to packaging.
+`build.bat notest` skips the test gate and goes straight to packaging and
+provenance verification.
+
+A clean tree produces the version and short commit in the filename. A tree
+with tracked or untracked source changes adds `-dirty`; the same Boolean is
+stored in `extension/dist/build-provenance.json` and the native host reports it
+as `vcs.modified` through `go version -m`.
 
 ## Run the checks individually
 
@@ -33,6 +44,7 @@ The script chains, and stops at the first failure:
 powershell -ExecutionPolicy Bypass -File scripts/test-companion.ps1
 npm run check-types
 npm test
+powershell -ExecutionPolicy Bypass -File scripts/write-build-provenance.ps1
 ```
 
 The npm script names behind the build are listed in

@@ -1,8 +1,9 @@
 # Publish to the Visual Studio Marketplace
 
-Goal: publish a locally built `workspace-halo-<version>-win32-x64.vsix` as a
-new version of the existing public Marketplace listing under the `vonc`
-publisher. The Marketplace is the normal installation route, so an update
+Goal: publish a clean
+`workspace-halo-<version>-<commit>-win32-x64.vsix` as a new version of the
+existing public Marketplace listing under the `vonc` publisher. The
+Marketplace is the normal installation route, so an update
 reaches installed copies and new users without requiring them to handle a VSIX.
 The release loop runs in a browser with a plain Microsoft account: no Azure
 subscription, Azure
@@ -70,13 +71,16 @@ one. Build with `build.bat`, then upload from the browser on the
 [management page](https://marketplace.visualstudio.com/manage):
 
 - First publish: **New extension > Visual Studio Code**, drop
-  `workspace-halo-<version>-win32-x64.vsix`.
+  `workspace-halo-<version>-<commit>-win32-x64.vsix`.
 - Later releases: the **...** menu on the Workspace Halo row > **Update**,
   same file.
 
 Because only a `win32-x64` target is published, the Marketplace offers the
 extension to Windows x64 VS Code alone; other platforms do not see it as
 installable, which matches reality.
+
+Do not upload an artifact whose filename contains `-dirty`. Run the build from
+the release commit and confirm the final provenance line reports `dirty=False`.
 
 ## After the upload
 
