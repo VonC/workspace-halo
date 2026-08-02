@@ -348,6 +348,45 @@ func TestTaskbarClassRecognition(t *testing.T) {
 	}
 }
 
+func TestTaskbarThumbnailClassRecognition(t *testing.T) {
+	for _, class := range []string{
+		"TaskListThumbnailWnd",
+		"XamlExplorerHostIslandWindow",
+		"XamlExplorerHostIslandWindow_WASDK",
+		"Microsoft.UI.Content.PopupWindowSiteBridge",
+	} {
+		if !isTaskbarThumbnailClass(class) {
+			t.Errorf("taskbar thumbnail class %q is not recognized", class)
+		}
+	}
+	for _, class := range []string{
+		"MultitaskingViewFrame",
+		"Chrome_WidgetWin_1",
+		"Shell_TrayWnd",
+		"TopLevelWindowForOverflowXamlIsland",
+	} {
+		if isTaskbarThumbnailClass(class) {
+			t.Errorf("class %q was wrongly treated as a taskbar thumbnail", class)
+		}
+	}
+}
+
+func TestTaskbarThumbnailHoverRetainsHalosOutsideDuplicateMode(t *testing.T) {
+	const extendTopology = uint32(0x00000004)
+	if !taskbarHoverState(false, true, false, extendTopology) {
+		t.Fatal("thumbnail hover did not retain halos in Extend mode")
+	}
+	if taskbarHoverState(false, true, false, displayConfigTopologyClone) {
+		t.Fatal("thumbnail hover bypassed Duplicate-mode protection")
+	}
+	if taskbarHoverState(false, true, true, extendTopology) {
+		t.Fatal("thumbnail hover ran while display topology was changing")
+	}
+	if !taskbarHoverState(true, false, true, displayConfigTopologyClone) {
+		t.Fatal("direct taskbar hover was suppressed during a topology transition")
+	}
+}
+
 func TestPointInRect(t *testing.T) {
 	r := rect{Left: 0, Top: 912, Right: 1536, Bottom: 960}
 	if !pointInRect(point{X: 700, Y: 940}, r) {

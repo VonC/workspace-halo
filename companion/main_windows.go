@@ -339,6 +339,7 @@ type application struct {
 	altTabVisible     bool
 	taskbarHover      bool
 	taskbarHit        bool
+	thumbnailHit      bool
 	cursorPos         point
 	shiftDown         bool
 	lastShiftRelease  uint64
@@ -1149,19 +1150,28 @@ func visibilityState(manual, activation, minimized, focused, altTab, taskbarHove
 	}
 }
 
-// isTaskbarClass recognizes the taskbar windows themselves: the cursor
-// resting on one of them is the reliable cue that the thumbnail previews
-// may be displayed, independent of how the shell renders them.
+// isTaskbarClass recognizes the taskbar windows themselves.
 func isTaskbarClass(class string) bool {
 	return class == "Shell_TrayWnd" || class == "Shell_SecondaryTrayWnd"
+}
+
+// isTaskbarThumbnailClass recognizes Explorer's taskbar thumbnail flyouts.
+// Windows 11 can host them in XAML islands, including Windows App SDK islands.
+// Task View's MultitaskingViewFrame is intentionally excluded.
+func isTaskbarThumbnailClass(class string) bool {
+	return class == "TaskListThumbnailWnd" ||
+		class == "Microsoft.UI.Content.PopupWindowSiteBridge" ||
+		strings.HasPrefix(class, "XamlExplorerHostIslandWindow")
 }
 
 func pointInRect(p point, r rect) bool {
 	return p.X >= r.Left && p.X < r.Right && p.Y >= r.Top && p.Y < r.Bottom
 }
 
-// taskbarEnumProc visits top-level windows until it finds a taskbar under
-// the cursor. Task View and already-open thumbnail flyouts are not triggers.
+// taskbarEnumProc visits top-level windows until it finds a taskbar or an
+// Explorer-hosted taskbar thumbnail flyout under the cursor. Shell flyouts
+// live in z-bands that a sibling walk from an application window cannot see,
+// so detection goes through EnumWindows.
 var taskbarEnumProc = syscall.NewCallback(func(hwnd, _ uintptr) uintptr {
 	app := activeApp
 	if app == nil {
@@ -1176,22 +1186,43 @@ var taskbarEnumProc = syscall.NewCallback(func(hwnd, _ uintptr) uintptr {
 			app.taskbarHit = true
 			return 0
 		}
+		return 1
+	}
+	if !isTaskbarThumbnailClass(class) || isCloaked(hwnd) {
+		return 1
+	}
+	r, err := windowRect(hwnd)
+	if err != nil || r.width() <= 2 || r.height() <= 2 || !pointInRect(app.cursorPos, r) {
+		return 1
+	}
+	path, err := processImagePath(hwnd)
+	if err == nil && strings.EqualFold(filepath.Base(path), "explorer.exe") {
+		app.thumbnailHit = true
+		return 0
 	}
 	return 1
 })
 
-// pollTaskbarHover reports whether the pointer is currently over a taskbar.
+func taskbarHoverState(taskbarHit, thumbnailHit, topologyPending bool, topology uint32) bool {
+	return taskbarHit ||
+		(thumbnailHit && !topologyPending && topology != displayConfigTopologyClone)
+}
+
+// pollTaskbarHover reports whether the pointer is over a taskbar or, outside
+// Duplicate mode, one of its thumbnail previews.
 func (a *application) pollTaskbarHover() {
 	a.taskbarHit = false
+	a.thumbnailHit = false
 	a.cursorPos = point{X: -2147483648, Y: -2147483648}
 	if result, _, _ := procGetCursorPos.Call(uintptr(unsafe.Pointer(&a.cursorPos))); result == 0 {
 		a.cursorPos = point{X: -2147483648, Y: -2147483648}
 	}
 	procEnumWindows.Call(taskbarEnumProc, 0)
-	if a.taskbarHit && !a.taskbarHover {
+	hover := taskbarHoverState(a.taskbarHit, a.thumbnailHit, a.topologyDirty, a.displayTopology)
+	if hover && !a.taskbarHover {
 		a.logger.Printf("taskbar hover")
 	}
-	a.taskbarHover = a.taskbarHit
+	a.taskbarHover = hover
 }
 
 func (a *application) pollDoubleShift(focused bool) {
