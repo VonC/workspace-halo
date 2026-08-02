@@ -11,7 +11,8 @@ REM
 REM               The VSIX build itself chains, through npm:
 REM                 - build:native  the Go/Win32 host (needs Go on PATH)
 REM                 - compile       tsc --noEmit, then the esbuild bundle
-REM                 - vsce package  the win32-x64 VSIX
+REM                 - provenance    Git commit and dirty-state metadata
+REM                 - vsce package  the commit-named win32-x64 VSIX
 REM
 REM Parameters:
 REM    (none)          full build: deps, test gate, VSIX
@@ -41,14 +42,23 @@ if errorlevel 1 (
 pushd "%build_dir%"
 
 set "build_artifact="
+set "build_commit="
+set "build_dirty="
 set "build_version="
-for /f "delims=" %%v in ('node -p "require('./package.json').version"') do set "build_version=%%v"
-if not defined build_version (
-  echo FATAL: package.json does not contain a readable version.
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\write-build-provenance.ps1
+if errorlevel 1 (
+  echo FATAL: build provenance could not be generated.
   goto:build_failed_popd
 )
-set "build_artifact=workspace-halo-%build_version%-win32-x64.vsix"
-echo INFO: Building Workspace Halo %build_version%
+for /f "delims=" %%v in ('node -p "require('./dist/build-provenance.json').version"') do set "build_version=%%v"
+for /f "delims=" %%v in ('node -p "require('./dist/build-provenance.json').shortCommit"') do set "build_commit=%%v"
+for /f "delims=" %%v in ('node -p "require('./dist/build-provenance.json').dirty"') do set "build_dirty=%%v"
+for /f "delims=" %%v in ('node -p "require('./dist/build-provenance.json').artifact"') do set "build_artifact=%%v"
+if not defined build_artifact (
+  echo FATAL: build provenance does not contain an artifact name.
+  goto:build_failed_popd
+)
+echo INFO: Building Workspace Halo %build_version% from %build_commit% ^(dirty=%build_dirty%^)
 
 if not exist "%build_dir%\node_modules" (
   echo INFO: node_modules is missing, installing from package-lock.json
@@ -92,6 +102,11 @@ if not exist "%build_dir%\%build_artifact%" (
   echo FATAL: expected VSIX was not created: %build_artifact%
   goto:build_failed_popd
 )
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-vsix-provenance.ps1 -Vsix "%build_artifact%"
+if errorlevel 1 (
+  echo FATAL: VSIX provenance verification failed.
+  goto:build_failed_popd
+)
 
 popd
 
@@ -112,6 +127,8 @@ exit /b 1
 
 :build_unset
 set "build_artifact="
+set "build_commit="
 set "build_dir="
+set "build_dirty="
 set "build_version="
 goto:eof

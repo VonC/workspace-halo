@@ -6,7 +6,7 @@ $output = Join-Path $root "bin\win32-x64\workspace-halo-host.exe"
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $output) | Out-Null
 Push-Location (Join-Path $root "companion")
 try {
-    go build -buildvcs=false -trimpath -ldflags "-s -w" -o $output .
+    go build -buildvcs=true -trimpath -ldflags "-s -w" -o $output .
     if ($LASTEXITCODE -ne 0) {
         throw "go build failed with exit code $LASTEXITCODE"
     }
@@ -14,4 +14,3 @@ try {
 finally {
     Pop-Location
 }
-

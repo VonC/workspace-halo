@@ -36,10 +36,11 @@
   ],
   "scripts": {
     "build:native": "powershell -ExecutionPolicy Bypass -File scripts/build-native-host.ps1",
+    "build:provenance": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/write-build-provenance.ps1",
     "check-types": "tsc --noEmit",
     "compile": "npm run check-types && node esbuild.mjs",
     "test": "npm run check-types && tsx --test test/*.test.ts",
-    "vscode:prepublish": "npm run build:native && npm run compile",
+    "vscode:prepublish": "npm run build:native && npm run compile && npm run build:provenance",
     "package:vsix": "vsce package --target win32-x64"
   },
   "contributes": {

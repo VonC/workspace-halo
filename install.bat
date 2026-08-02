@@ -27,13 +27,19 @@ set "install_dir=%install_dir:~0,-1%"
 call <NUL "%install_dir%\senv.bat"
 if errorlevel 1 goto:install_failed
 
-set "install_version="
-for /f "delims=" %%v in ('node -p "require('./package.json').version"') do set "install_version=%%v"
-if not defined install_version (
-  echo FATAL: package.json does not contain a readable version.
+set "install_artifact="
+set "install_provenance=%install_dir%\dist\build-provenance.json"
+if not exist "%install_provenance%" (
+  echo FATAL: Build provenance not found: "%install_provenance%"
+  echo        Run build.bat first.
   goto:install_failed
 )
-set "install_vsix=%install_dir%\workspace-halo-%install_version%-win32-x64.vsix"
+for /f "delims=" %%v in ('node -p "require('./dist/build-provenance.json').artifact"') do set "install_artifact=%%v"
+if not defined install_artifact (
+  echo FATAL: Build provenance does not contain an artifact name.
+  goto:install_failed
+)
+set "install_vsix=%install_dir%\%install_artifact%"
 if not exist "%install_vsix%" (
   echo FATAL: Packaged VSIX not found: "%install_vsix%"
   echo        Run build.bat first.
@@ -75,7 +81,7 @@ if not "%install_result%"=="0" (
   goto:install_failed
 )
 
-echo OK: Installed workspace-halo-%install_version%-win32-x64.vsix
+echo OK: Installed %install_artifact%
 call:install_unset
 exit /b 0
 
@@ -89,9 +95,10 @@ exit /b 1
 
 :install_unset
 set "install_code="
+set "install_artifact="
 set "install_node_options="
 set "install_result="
 set "install_vsix="
 set "install_dir="
-set "install_version="
+set "install_provenance="
 goto:eof
