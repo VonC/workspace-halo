@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.0.21
+
+- Keep every VS Code halo visible while the cursor moves from the taskbar onto
+  its thumbnail flyout in non-Duplicate display modes.
+- Limit thumbnail-hover detection to visible, uncloaked Explorer-owned Windows
+  11 and classic thumbnail surfaces, excluding Task View and retaining the
+  existing Duplicate-mode and topology-transition protections.
+
 ## 0.0.20
 
 - Restrict halo display to extension activation, real window overlap, Alt+Tab,
