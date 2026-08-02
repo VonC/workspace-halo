@@ -393,6 +393,30 @@ func TestTaskbarThumbnailHoverRetainsHalosOutsideDuplicateMode(t *testing.T) {
 	}
 }
 
+func TestTaskbarThumbnailChildHitRetainsOnlyAnExistingTaskbarHover(t *testing.T) {
+	taskbar := rect{Left: 0, Top: 1040, Right: 1920, Bottom: 1080}
+	flyout := rect{Left: 620, Top: 720, Right: 1300, Bottom: 1040}
+	cursor := point{X: 900, Y: 900}
+	if !taskbarThumbnailChildHit(true, true, cursor, taskbar, flyout) {
+		t.Fatal("a visible taskbar child under the cursor did not retain hover")
+	}
+	if taskbarThumbnailChildHit(false, true, cursor, taskbar, flyout) {
+		t.Fatal("a taskbar child started hover without a direct taskbar hit")
+	}
+	if taskbarThumbnailChildHit(true, false, cursor, taskbar, flyout) {
+		t.Fatal("a hidden taskbar child retained hover")
+	}
+	if taskbarThumbnailChildHit(true, true, point{X: 900, Y: 1060}, taskbar, flyout) {
+		t.Fatal("a cursor still inside the taskbar was treated as flyout hover")
+	}
+	if taskbarThumbnailChildHit(true, true, point{X: 200, Y: 900}, taskbar, flyout) {
+		t.Fatal("a taskbar child away from the cursor retained hover")
+	}
+	if taskbarThumbnailChildHit(true, true, cursor, taskbar, rect{Left: 900, Top: 900, Right: 902, Bottom: 902}) {
+		t.Fatal("an unlaid-out child retained hover")
+	}
+}
+
 func TestPointInRect(t *testing.T) {
 	r := rect{Left: 0, Top: 912, Right: 1536, Bottom: 960}
 	if !pointInRect(point{X: 700, Y: 940}, r) {

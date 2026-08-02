@@ -108,6 +108,7 @@ var (
 
 	procRegisterClassExW              = user32.NewProc("RegisterClassExW")
 	procEnumWindows                   = user32.NewProc("EnumWindows")
+	procEnumChildWindows              = user32.NewProc("EnumChildWindows")
 	procGetCursorPos                  = user32.NewProc("GetCursorPos")
 	procCreateWindowExW               = user32.NewProc("CreateWindowExW")
 	procDefWindowProcW                = user32.NewProc("DefWindowProcW")
@@ -340,6 +341,7 @@ type application struct {
 	taskbarHover      bool
 	taskbarHit        bool
 	thumbnailVisible  bool
+	taskbarRect       rect
 	cursorPos         point
 	shiftDown         bool
 	lastShiftRelease  uint64
@@ -1168,13 +1170,43 @@ func pointInRect(p point, r rect) bool {
 	return p.X >= r.Left && p.X < r.Right && p.Y >= r.Top && p.Y < r.Bottom
 }
 
+func taskbarThumbnailChildHit(wasHover, visible bool, cursor point, taskbar, child rect) bool {
+	return wasHover &&
+		visible &&
+		child.width() > 2 &&
+		child.height() > 2 &&
+		!pointInRect(cursor, taskbar) &&
+		pointInRect(cursor, child)
+}
+
+// taskbarChildEnumProc recognizes the Windows 11 hover flyout rendered by a
+// child composition window of Shell_TrayWnd. Late Windows 11 builds no longer
+// expose that surface through EnumWindows, but its shown child rectangle still
+// covers the cursor while it is over a miniature.
+var taskbarChildEnumProc = syscall.NewCallback(func(hwnd, _ uintptr) uintptr {
+	app := activeApp
+	if app == nil {
+		return 0
+	}
+	visible, _, _ := procIsWindowVisible.Call(hwnd)
+	r, err := windowRect(hwnd)
+	if err != nil || !taskbarThumbnailChildHit(
+		app.taskbarHover,
+		visible != 0,
+		app.cursorPos,
+		app.taskbarRect,
+		r,
+	) {
+		return 1
+	}
+	app.thumbnailVisible = true
+	return 0
+})
+
 // taskbarEnumProc visits top-level windows until it finds either the taskbar
-// under the cursor or a laid-out Explorer-hosted thumbnail flyout. Windows 11
-// renders the flyout through XAML bridges whose top-level rectangle does not
-// reliably contain the cursor, so flyout detection uses its visible surface
-// rather than a second point-in-rectangle test. Shell flyouts live in z-bands
-// that a sibling walk from an application window cannot see, so detection goes
-// through EnumWindows.
+// under the cursor, a taskbar-owned child hover flyout, or a laid-out classic
+// top-level thumbnail flyout. Shell flyouts live in z-bands that a sibling walk
+// from an application window cannot see, so detection starts at EnumWindows.
 var taskbarEnumProc = syscall.NewCallback(func(hwnd, _ uintptr) uintptr {
 	app := activeApp
 	if app == nil {
@@ -1185,9 +1217,20 @@ var taskbarEnumProc = syscall.NewCallback(func(hwnd, _ uintptr) uintptr {
 	}
 	class := windowClass(hwnd)
 	if isTaskbarClass(class) {
-		if r, err := windowRect(hwnd); err == nil && pointInRect(app.cursorPos, r) {
+		r, err := windowRect(hwnd)
+		if err != nil {
+			return 1
+		}
+		if pointInRect(app.cursorPos, r) {
 			app.taskbarHit = true
 			return 0
+		}
+		if app.taskbarHover {
+			app.taskbarRect = r
+			procEnumChildWindows.Call(hwnd, taskbarChildEnumProc, 0)
+			if app.thumbnailVisible {
+				return 0
+			}
 		}
 		return 1
 	}
@@ -1212,9 +1255,9 @@ func taskbarHoverState(wasHover, taskbarHit, thumbnailVisible, topologyPending b
 }
 
 // pollTaskbarHover starts on a direct taskbar hit. Outside Duplicate mode, an
-// already-visible thumbnail flyout then keeps the hover active until it closes.
-// Requiring the previous hover prevents Task View or another shell surface from
-// starting the trigger independently.
+// taskbar-owned child or an already-visible classic thumbnail flyout then keeps
+// the hover active until it closes. Requiring the previous hover prevents Task
+// View or another shell surface from starting the trigger independently.
 func (a *application) pollTaskbarHover() {
 	a.taskbarHit = false
 	a.thumbnailVisible = false
