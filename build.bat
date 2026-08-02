@@ -40,6 +40,16 @@ if errorlevel 1 (
 
 pushd "%build_dir%"
 
+set "build_artifact="
+set "build_version="
+for /f "delims=" %%v in ('node -p "require('./package.json').version"') do set "build_version=%%v"
+if not defined build_version (
+  echo FATAL: package.json does not contain a readable version.
+  goto:build_failed_popd
+)
+set "build_artifact=workspace-halo-%build_version%-win32-x64.vsix"
+echo INFO: Building Workspace Halo %build_version%
+
 if not exist "%build_dir%\node_modules" (
   echo INFO: node_modules is missing, installing from package-lock.json
   call npm ci
@@ -73,15 +83,19 @@ if errorlevel 1 (
 echo INFO: ----------------------------------------
 echo INFO: Packaging the VSIX for '%PRJ_DIR_NAME%'
 echo INFO: ----------------------------------------
-call npm run package:vsix
+call npm run package:vsix -- --out "%build_artifact%"
 if errorlevel 1 (
   echo FATAL: the VSIX packaging failed.
+  goto:build_failed_popd
+)
+if not exist "%build_dir%\%build_artifact%" (
+  echo FATAL: expected VSIX was not created: %build_artifact%
   goto:build_failed_popd
 )
 
 popd
 
-for %%f in ("%build_dir%\*.vsix") do echo OK: Packaged %%~nxf ^(%%~zf bytes^)
+for %%f in ("%build_dir%\%build_artifact%") do echo OK: Packaged %%~nxf ^(%%~zf bytes^)
 call:build_unset
 exit /b 0
 
@@ -97,5 +111,7 @@ exit /b 1
 ::##################################################
 
 :build_unset
+set "build_artifact="
 set "build_dir="
+set "build_version="
 goto:eof

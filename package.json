@@ -2,7 +2,7 @@
   "name": "workspace-halo",
   "displayName": "Workspace Halo",
   "description": "Identify VS Code workspace windows with a configurable Alt+Tab halo.",
-  "version": "0.0.20",
+  "version": "0.0.21",
   "publisher": "vonc",
   "license": "MIT",
   "repository": {
@@ -40,7 +40,7 @@
     "compile": "npm run check-types && node esbuild.mjs",
     "test": "npm run check-types && tsx --test test/*.test.ts",
     "vscode:prepublish": "npm run build:native && npm run compile",
-    "package:vsix": "vsce package --target win32-x64 --out workspace-halo-win32-x64.vsix"
+    "package:vsix": "vsce package --target win32-x64"
   },
   "contributes": {
     "configuration": {
