@@ -38,6 +38,19 @@ with tracked or untracked source changes adds `-dirty`; the same Boolean is
 stored in `extension/dist/build-provenance.json` and the native host reports it
 as `vcs.modified` through `go version -m`.
 
+After tagging a release, run `version.bat` to audit the artifact recorded by
+the latest build. Pass a VSIX path to audit another artifact:
+
+```bat
+version.bat
+version.bat workspace-halo-0.0.21-debc8e2-win32-x64.vsix
+```
+
+The audit reads the package and VSIX versions, full provenance SHA-1, native
+host VCS stamp, dirty state, and filename from the package. It rejects dirty
+packages, checks that a local tag named for the embedded version targets the
+embedded commit, then prints the file's SHA-256 digest.
+
 ## Run the checks individually
 
 ```powershell

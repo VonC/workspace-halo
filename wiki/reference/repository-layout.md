@@ -23,6 +23,7 @@ The source tree of the extension, its native host, and their build scripts.
 | `package.json` | Extension manifest: `ui` extension kind, `onStartupFinished` activation, the `workspaceHalo.*` configuration schema, and the npm scripts |
 | `esbuild.mjs` | Bundles `src/extension.ts` to `dist/extension.js` |
 | `build.bat` | Full build: environment, dependencies, test gate, commit-named VSIX packaging and provenance verification; `build.bat notest` skips the test gate |
+| `version.bat` | Audits a built VSIX's internal version, Git identity, local version tag, and SHA-256 |
 | `install.bat` | Installs the exact VSIX recorded by build provenance into `%PRGS%\vscodes\current` with `--force`; the `i` doskey alias runs it |
 | `senv.bat` | Initializes the project command prompt and its doskey aliases |
 | `workspace-halo-<version>-<commit>[-dirty]-win32-x64.vsix` | The packaged platform-specific extension with visible Git provenance |
@@ -45,7 +46,7 @@ The source tree of the extension, its native host, and their build scripts.
 | --- | --- |
 | `scripts/build-native-host.ps1` | Builds the packaged host executable with a repository-local Go cache |
 | `scripts/write-build-provenance.ps1` | Generates packaged version, commit, dirty-state, and artifact metadata |
-| `scripts/verify-vsix-provenance.ps1` | Checks packaged metadata and the native host VCS stamp against the build tree |
+| `scripts/verify-vsix-provenance.ps1` | Checks packaged metadata and the native host VCS stamp against the build tree or, for `version.bat`, the matching local version tag |
 | `scripts/build-companion.ps1` | Builds the standalone diagnostic companion `bin/workspace-halo-companion.exe` |
 | `scripts/test-companion.ps1` | Runs the Go test suite of the host |
 | `scripts/install-dev-dependencies.ps1` | Runs `npm install` with an explicit Node.js home |

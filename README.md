@@ -59,6 +59,9 @@ Install the resulting
 **Ctrl+Shift+P** to open VS Code's Command Palette, then running the
 **Extensions: Install from VSIX...** command.
 
+Run `version.bat` after packaging to check the VSIX's internal version and Git
+identity against its native host and matching local version tag.
+
 ## When the halo appears
 
 The active halo shows itself only at identification moments:

@@ -12,6 +12,8 @@
 - Stamp every VSIX with its Git commit and dirty state, include the same data
   inside the package and native host, and reject provenance mismatches before
   reporting a successful build.
+- Add `version.bat` to audit a VSIX against its embedded version, full Git
+  SHA-1, native host stamp, local version tag, and SHA-256 digest.
 
 ## 0.0.20
 
