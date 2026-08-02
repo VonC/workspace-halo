@@ -342,6 +342,7 @@ type application struct {
 	taskbarHit        bool
 	thumbnailVisible  bool
 	taskbarRect       rect
+	enumTaskbarRect   rect
 	cursorPos         point
 	shiftDown         bool
 	lastShiftRelease  uint64
@@ -1179,6 +1180,21 @@ func taskbarThumbnailChildHit(wasHover, visible bool, cursor point, taskbar, chi
 		pointInRect(cursor, child)
 }
 
+// taskbarThumbnailBandHit covers Windows 11 composition-only previews. Those
+// miniatures are drawn above the bottom taskbar without an independently
+// hit-testable HWND rectangle. A direct taskbar hit must have started the state;
+// the band can only retain it while the cursor remains in the preview area.
+func taskbarThumbnailBandHit(wasHover bool, cursor point, taskbar rect) bool {
+	if !wasHover || taskbar.width() <= 2 || taskbar.height() <= 2 {
+		return false
+	}
+	depth := int32(taskbar.height() * 8)
+	return cursor.X >= taskbar.Left &&
+		cursor.X < taskbar.Right &&
+		cursor.Y >= taskbar.Top-depth &&
+		cursor.Y < taskbar.Top
+}
+
 // taskbarChildEnumProc recognizes the Windows 11 hover flyout rendered by a
 // child composition window of Shell_TrayWnd. Late Windows 11 builds no longer
 // expose that surface through EnumWindows, but its shown child rectangle still
@@ -1194,7 +1210,7 @@ var taskbarChildEnumProc = syscall.NewCallback(func(hwnd, _ uintptr) uintptr {
 		app.taskbarHover,
 		visible != 0,
 		app.cursorPos,
-		app.taskbarRect,
+		app.enumTaskbarRect,
 		r,
 	) {
 		return 1
@@ -1222,11 +1238,12 @@ var taskbarEnumProc = syscall.NewCallback(func(hwnd, _ uintptr) uintptr {
 			return 1
 		}
 		if pointInRect(app.cursorPos, r) {
+			app.taskbarRect = r
 			app.taskbarHit = true
 			return 0
 		}
 		if app.taskbarHover {
-			app.taskbarRect = r
+			app.enumTaskbarRect = r
 			procEnumChildWindows.Call(hwnd, taskbarChildEnumProc, 0)
 			if app.thumbnailVisible {
 				return 0
@@ -1266,10 +1283,15 @@ func (a *application) pollTaskbarHover() {
 		a.cursorPos = point{X: -2147483648, Y: -2147483648}
 	}
 	procEnumWindows.Call(taskbarEnumProc, 0)
+	thumbnailHover := a.thumbnailVisible || taskbarThumbnailBandHit(
+		a.taskbarHover,
+		a.cursorPos,
+		a.taskbarRect,
+	)
 	hover := taskbarHoverState(
 		a.taskbarHover,
 		a.taskbarHit,
-		a.thumbnailVisible,
+		thumbnailHover,
 		a.topologyDirty,
 		a.displayTopology,
 	)

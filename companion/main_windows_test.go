@@ -417,6 +417,28 @@ func TestTaskbarThumbnailChildHitRetainsOnlyAnExistingTaskbarHover(t *testing.T)
 	}
 }
 
+func TestTaskbarThumbnailBandRetainsCompositionOnlyPreviewHover(t *testing.T) {
+	taskbar := rect{Left: 0, Top: 912, Right: 1536, Bottom: 960}
+	if !taskbarThumbnailBandHit(true, point{X: 700, Y: 700}, taskbar) {
+		t.Fatal("the Windows 11 preview band did not retain taskbar hover")
+	}
+	if taskbarThumbnailBandHit(false, point{X: 700, Y: 700}, taskbar) {
+		t.Fatal("the preview band started hover without a direct taskbar hit")
+	}
+	if taskbarThumbnailBandHit(true, point{X: 700, Y: 930}, taskbar) {
+		t.Fatal("a direct taskbar point was treated as preview-band retention")
+	}
+	if taskbarThumbnailBandHit(true, point{X: 700, Y: 527}, taskbar) {
+		t.Fatal("a point above the preview band retained taskbar hover")
+	}
+	if taskbarThumbnailBandHit(true, point{X: 1536, Y: 700}, taskbar) {
+		t.Fatal("a point beyond the taskbar width retained taskbar hover")
+	}
+	if taskbarThumbnailBandHit(true, point{X: 700, Y: 700}, rect{}) {
+		t.Fatal("an unknown taskbar rectangle retained hover")
+	}
+}
+
 func TestPointInRect(t *testing.T) {
 	r := rect{Left: 0, Top: 912, Right: 1536, Bottom: 960}
 	if !pointInRect(point{X: 700, Y: 940}, r) {
