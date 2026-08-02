@@ -14,6 +14,8 @@
   reporting a successful build.
 - Add `version.bat` to audit a VSIX against its embedded version, full Git
   SHA-1, native host stamp, local version tag, and SHA-256 digest.
+- Detect modern Windows 11 thumbnail flyouts through taskbar-owned composition
+  children so visible VS Code windows retain their halo over the miniatures.
 
 ## 0.0.20
 

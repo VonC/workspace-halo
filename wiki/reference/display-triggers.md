@@ -12,7 +12,7 @@ changes.
 | 1 | `double-shift` | shown | Two Shift press-and-release gestures within 400 ms while the window is focused | The next input anywhere (system last-input change) or focus loss |
 | 2 | `activation` | shown | The host has just bound; shown immediately, even unfocused | First mouse-button press while focused, or gaining focus when initially unfocused |
 | 3 | `alt-tab` | shown | Alt is held and Tab has been pressed, on any monitor | Alt is released |
-| 4 | `taskbar-hover` | shown | The cursor is inside a taskbar window (`Shell_TrayWnd` or `Shell_SecondaryTrayWnd`), even while the window is focused; outside Duplicate mode, its visible thumbnail flyout keeps the trigger active | The cursor leaves the taskbar and the thumbnail flyout closes |
+| 4 | `taskbar-hover` | shown | The cursor is inside a taskbar window (`Shell_TrayWnd` or `Shell_SecondaryTrayWnd`), even while the window is focused; outside Duplicate mode, a taskbar-owned Windows 11 composition child or classic top-level thumbnail flyout under the cursor keeps the trigger active | The cursor leaves the taskbar and the thumbnail flyout closes |
 | 5 | `minimized` | shown | The window is minimized, or its minimize interception is in progress | The window is restored |
 | 6 | `focused` | hidden | The window is foreground and no higher state applies | Focus is lost |
 | 7 | `occluded` | shown | Another window partially covers this one | The overlap ends |
