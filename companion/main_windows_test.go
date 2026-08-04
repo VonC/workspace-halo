@@ -180,6 +180,16 @@ func TestLogoUpscalesToOneThirdHeight(t *testing.T) {
 	}
 }
 
+func TestMissingLogoDrawsNothing(t *testing.T) {
+	destination := image.NewNRGBA(image.Rect(0, 0, 300, 300))
+	drawScaledLogo(destination, nil, 12)
+	for _, corner := range []image.Point{{X: 230, Y: 180}, {X: 150, Y: 150}, {X: 299, Y: 299}} {
+		if got := destination.NRGBAAt(corner.X, corner.Y); got.A != 0 {
+			t.Fatalf("pixel (%d,%d) = %#v, want a fully transparent canvas without a logo", corner.X, corner.Y, got)
+		}
+	}
+}
+
 func TestVisibilityStatePrecedence(t *testing.T) {
 	tests := []struct {
 		manual, activation, minimized, focused, altTab, taskbarHover, occluded bool

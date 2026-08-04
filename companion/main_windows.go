@@ -425,7 +425,7 @@ func parseFlags() (config, error) {
 	var cfg config
 	var logoPath, colorValue, hwndValue string
 	flag.StringVar(&cfg.name, "name", "", "workspace name displayed in the overlay")
-	flag.StringVar(&logoPath, "logo", "", "PNG logo path")
+	flag.StringVar(&logoPath, "logo", "", "optional PNG logo path; without it the halo draws no logo")
 	flag.StringVar(&colorValue, "color", "#ff2d55", "shared border and text color")
 	flag.IntVar(&cfg.borderWidth, "border-width", 12, "border width in pixels")
 	flag.StringVar(&cfg.borderStyle, "border-style", "solid", "solid, double, dashed, or dotted")
@@ -448,18 +448,18 @@ func parseFlags() (config, error) {
 	if strings.TrimSpace(cfg.name) == "" {
 		return cfg, errors.New("--name is required")
 	}
-	if logoPath == "" {
-		return cfg, errors.New("--logo is required")
+	if logoPath != "" {
+		file, err := os.Open(logoPath)
+		if err != nil {
+			return cfg, fmt.Errorf("open logo: %w", err)
+		}
+		defer file.Close()
+		cfg.logo, err = png.Decode(file)
+		if err != nil {
+			return cfg, fmt.Errorf("decode PNG logo: %w", err)
+		}
 	}
-	file, err := os.Open(logoPath)
-	if err != nil {
-		return cfg, fmt.Errorf("open logo: %w", err)
-	}
-	defer file.Close()
-	cfg.logo, err = png.Decode(file)
-	if err != nil {
-		return cfg, fmt.Errorf("decode PNG logo: %w", err)
-	}
+	var err error
 	cfg.color, err = parseColor(colorValue)
 	if err != nil {
 		return cfg, err
@@ -1541,6 +1541,9 @@ func applyTransparentColorKey(pixels []byte) {
 }
 
 func drawScaledLogo(dst *image.NRGBA, src image.Image, borderWidth int) {
+	if src == nil {
+		return
+	}
 	w, h := dst.Bounds().Dx(), dst.Bounds().Dy()
 	padding := borderWidth + 8
 	maxSide := h / 3
