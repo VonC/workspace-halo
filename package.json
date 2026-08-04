@@ -130,6 +130,14 @@
           "minimum": 0,
           "scope": "resource",
           "description": "Length in pixels of the alternating opaque black segments of the border. 0 draws the continuous borderMotif instead."
+        },
+        "workspaceHalo.logoScale": {
+          "type": "integer",
+          "default": 33,
+          "minimum": 1,
+          "maximum": 100,
+          "scope": "resource",
+          "description": "Length of the logo's longer side as a percentage of the window height, when a logo file exists. The logo keeps its aspect ratio and stays inside the border padding."
         }
       }
     }

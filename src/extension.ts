@@ -23,6 +23,7 @@ interface HaloSettings {
   readonly pillOpacity: number;
   readonly pillMargin: number;
   readonly borderSegment: number;
+  readonly logoScale: number;
 }
 
 interface Registration {
@@ -231,7 +232,8 @@ class WorkspaceHaloController implements vscode.Disposable {
       namePill: workspaceScopedValue(halo.inspect<boolean>("namePill"), true),
       pillOpacity: workspaceScopedValue(halo.inspect<number>("pillOpacity"), 100),
       pillMargin: workspaceScopedValue(halo.inspect<number>("pillMargin"), 50),
-      borderSegment: workspaceScopedValue(halo.inspect<number>("borderSegment"), 50)
+      borderSegment: workspaceScopedValue(halo.inspect<number>("borderSegment"), 50),
+      logoScale: workspaceScopedValue(halo.inspect<number>("logoScale"), 33)
     };
   }
 
@@ -285,6 +287,7 @@ class WorkspaceHaloController implements vscode.Disposable {
       "--pill-opacity", String(registration.settings.pillOpacity),
       "--pill-margin", String(registration.settings.pillMargin),
       "--border-segment", String(registration.settings.borderSegment),
+      "--logo-scale", String(registration.settings.logoScale),
       "--log", logPath,
       "--focus-handshake"
     ];
