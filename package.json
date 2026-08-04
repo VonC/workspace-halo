@@ -2,7 +2,7 @@
   "name": "workspace-halo",
   "displayName": "Workspace Halo",
   "description": "Identify VS Code workspace windows with a configurable Alt+Tab halo.",
-  "version": "0.0.21",
+  "version": "0.0.22",
   "publisher": "vonc",
   "license": "MIT",
   "repository": {
