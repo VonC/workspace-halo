@@ -18,6 +18,7 @@ the renderer.
 | `workspaceHalo.borderWidth` | integer | `12` | 1 to 64 | Border width in pixels |
 | `workspaceHalo.borderMotif` | string | `solid` | `solid`, `double`, `dashed`, `dotted` | Continuous border motif, drawn when `borderSegment` is 0 |
 | `workspaceHalo.borderSegment` | integer | `50` | 0 or more | Length in pixels of the alternating opaque black border segments; 0 draws the continuous motif instead |
+| `workspaceHalo.logoScale` | integer | `33` | 1 to 100 | Length of the logo's longer side as a percentage of the window height, when a logo file exists; aspect ratio is kept and the logo stays inside the border padding |
 | `workspaceHalo.fontFamily` | string | `Segoe UI` | installed family | Windows font family of the workspace name |
 | `workspaceHalo.fontWeight` | integer | `700` | 1 to 1000 | Windows font weight of the workspace name |
 | `workspaceHalo.textShadow` | boolean | `true` | | Draw a dark shadow behind the name |

@@ -2,7 +2,7 @@
 
 Starting from the `halo-demo` workspace of
 [tutorial 01](01-halo-your-first-workspace.md), you now restyle its halo step
-by step: color, border, name, and pill. Every change below takes effect on
+by step: color, border, name, pill, and logo. Every change below takes effect on
 its own; the extension watches the settings and restarts its renderer, so
 after each save the next halo already uses the new values.
 
@@ -57,7 +57,24 @@ edges. To see the name without any pill, set
 `"workspaceHalo.namePill": false`; without its shadow, set
 `"workspaceHalo.textShadow": false`.
 
-## Step 5 - Check the result on every trigger
+## Step 5 - Scale the logo
+
+If you added the optional `.vscode\halo-demo.logo.png` in tutorial 01, make
+it more present:
+
+```json
+{
+  "workspaceHalo.logoScale": 60
+}
+```
+
+The logo's longer side now takes 60 percent of the window height instead of
+the default 33, still anchored in the lower right corner. Whatever the
+value, the logo keeps its aspect ratio and stays inside the border padding,
+so even 100 cannot push it over the border. Without a logo file this key
+changes nothing.
+
+## Step 6 - Check the result on every trigger
 
 Minimize the window and hover its taskbar thumbnail, then hold Alt+Tab: the
 restyled halo follows into every miniature, since thumbnails are composed

@@ -14,6 +14,7 @@ make it exit with code 1 and a `configuration error` message on stderr.
 | `--border-width` | `12` | Border width in pixels, positive |
 | `--border-style` | `solid` | `solid`, `double`, `dashed`, or `dotted` |
 | `--border-segment` | `50` | Length of the alternating black border segments; 0 for a continuous border |
+| `--logo-scale` | `33` | Logo's longer side as a percentage of the window height, 1 to 100 |
 | `--font` | `Segoe UI` | Installed Windows font family |
 | `--font-weight` | `700` | Windows font weight, 1 to 1000 |
 | `--shadow` | `true` | Draw the dark text shadow |
