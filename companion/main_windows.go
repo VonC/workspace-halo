@@ -314,6 +314,7 @@ type config struct {
 	pillOpacity    int
 	pillMargin     int
 	borderSegment  int
+	logoScale      int
 	logPath        string
 	allowAnyWindow bool
 	targetOverride uintptr
@@ -436,6 +437,7 @@ func parseFlags() (config, error) {
 	flag.IntVar(&cfg.pillOpacity, "pill-opacity", 100, "pill opacity percentage, 0 to 100")
 	flag.IntVar(&cfg.pillMargin, "pill-margin", 50, "minimal left and right margin of the pill and name, in pixels")
 	flag.IntVar(&cfg.borderSegment, "border-segment", 50, "length of the alternating black border segments, 0 for a continuous border")
+	flag.IntVar(&cfg.logoScale, "logo-scale", 33, "logo's longer side as a percentage of the window height, 1 to 100")
 	flag.StringVar(&cfg.logPath, "log", filepath.Join(os.TempDir(), "workspace-halo-companion.log"), "companion log file")
 	flag.BoolVar(&cfg.allowAnyWindow, "allow-any-window", false, "allow binding to a non-Code.exe foreground window for diagnostics")
 	flag.StringVar(&hwndValue, "hwnd", "", "optional target HWND in decimal or 0x-prefixed hexadecimal")
@@ -483,6 +485,9 @@ func parseFlags() (config, error) {
 	}
 	if cfg.borderSegment < 0 {
 		return cfg, errors.New("--border-segment must be zero or positive")
+	}
+	if cfg.logoScale < 1 || cfg.logoScale > 100 {
+		return cfg, errors.New("--logo-scale must be between 1 and 100")
 	}
 	if cfg.windowMode != "owned" && cfg.windowMode != "child" {
 		return cfg, fmt.Errorf("unsupported --window-mode %q", cfg.windowMode)
@@ -1475,7 +1480,7 @@ func isCloaked(hwnd uintptr) bool {
 func (a *application) renderOverlay(r rect) error {
 	w, h := r.width(), r.height()
 	canvas := image.NewNRGBA(image.Rect(0, 0, w, h))
-	drawScaledLogo(canvas, a.cfg.logo, a.cfg.borderWidth)
+	drawScaledLogo(canvas, a.cfg.logo, a.cfg.borderWidth, a.cfg.logoScale)
 	drawBorder(canvas, a.cfg.color, a.cfg.borderWidth, a.cfg.borderStyle, a.cfg.borderSegment)
 
 	hdc, _, callErr := procCreateCompatibleDC.Call(0)
@@ -1540,13 +1545,15 @@ func applyTransparentColorKey(pixels []byte) {
 	}
 }
 
-func drawScaledLogo(dst *image.NRGBA, src image.Image, borderWidth int) {
+// drawScaledLogo sizes the logo's longer side to scalePercent of the window
+// height, clamped so the logo and its padding always fit inside the window.
+func drawScaledLogo(dst *image.NRGBA, src image.Image, borderWidth, scalePercent int) {
 	if src == nil {
 		return
 	}
 	w, h := dst.Bounds().Dx(), dst.Bounds().Dy()
 	padding := borderWidth + 8
-	maxSide := h / 3
+	maxSide := h * scalePercent / 100
 	if maxSide > w-2*padding {
 		maxSide = w - 2*padding
 	}

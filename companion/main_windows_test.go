@@ -160,29 +160,43 @@ func TestBorderMotifs(t *testing.T) {
 	}
 }
 
-func TestLogoUpscalesToOneThirdHeight(t *testing.T) {
+func TestLogoScalesToItsShareOfWindowHeight(t *testing.T) {
 	source := image.NewNRGBA(image.Rect(0, 0, 3, 6))
 	for y := 0; y < 6; y++ {
 		for x := 0; x < 3; x++ {
 			source.SetNRGBA(x, y, color.NRGBA{R: 1, G: 2, B: 3, A: 255})
 		}
 	}
+	// Default 33 percent of a 300-pixel height: a 99-pixel longer side, so
+	// the 3x6 source upscales to 50x99 at origin (230, 181) with padding 20.
 	destination := image.NewNRGBA(image.Rect(0, 0, 300, 300))
-	drawScaledLogo(destination, source, 12)
-	if got := destination.NRGBAAt(230, 180); got.A != 255 {
+	drawScaledLogo(destination, source, 12, 33)
+	if got := destination.NRGBAAt(230, 181); got.A != 255 {
 		t.Fatalf("expected upscaled logo at bottom-right origin, got %#v", got)
 	}
-	if got := destination.NRGBAAt(229, 180); got.A != 0 {
+	if got := destination.NRGBAAt(229, 181); got.A != 0 {
 		t.Fatalf("logo exceeded its calculated width: %#v", got)
 	}
-	if got := destination.NRGBAAt(230, 179); got.A != 0 {
+	if got := destination.NRGBAAt(230, 180); got.A != 0 {
 		t.Fatalf("logo exceeded its calculated height: %#v", got)
+	}
+	// 66 percent doubles the longer side to 198: a 99x198 logo at (181, 82).
+	larger := image.NewNRGBA(image.Rect(0, 0, 300, 300))
+	drawScaledLogo(larger, source, 12, 66)
+	if got := larger.NRGBAAt(181, 82); got.A != 255 {
+		t.Fatalf("expected the larger scale to grow the logo, got %#v", got)
+	}
+	if got := larger.NRGBAAt(180, 82); got.A != 0 {
+		t.Fatalf("larger logo exceeded its calculated width: %#v", got)
+	}
+	if got := larger.NRGBAAt(181, 81); got.A != 0 {
+		t.Fatalf("larger logo exceeded its calculated height: %#v", got)
 	}
 }
 
 func TestMissingLogoDrawsNothing(t *testing.T) {
 	destination := image.NewNRGBA(image.Rect(0, 0, 300, 300))
-	drawScaledLogo(destination, nil, 12)
+	drawScaledLogo(destination, nil, 12, 33)
 	for _, corner := range []image.Point{{X: 230, Y: 180}, {X: 150, Y: 150}, {X: 299, Y: 299}} {
 		if got := destination.NRGBAAt(corner.X, corner.Y); got.A != 0 {
 			t.Fatalf("pixel (%d,%d) = %#v, want a fully transparent canvas without a logo", corner.X, corner.Y, got)
