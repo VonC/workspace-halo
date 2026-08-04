@@ -2,9 +2,11 @@ import { ChildProcess, spawn } from "node:child_process";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import {
-  logicalWorkspaceName,
+  isHexColor,
   optionalWorkspaceScopedValue,
+  randomHaloColor,
   resolveSharedColor,
+  savedWorkspaceName,
   selectLogo,
   selectRootName,
   workspaceScopedValue
@@ -26,7 +28,7 @@ interface HaloSettings {
 interface Registration {
   readonly workspaceName: string;
   readonly root: vscode.WorkspaceFolder;
-  readonly logo: vscode.Uri;
+  readonly logo?: vscode.Uri;
   readonly settings: HaloSettings;
   readonly warning?: string;
   readonly fingerprint: string;
@@ -143,10 +145,12 @@ class WorkspaceHaloController implements vscode.Disposable {
   }
 
   private async resolveRegistration(): Promise<Registration | undefined> {
-    const workspaceFileName = vscode.workspace.workspaceFile?.scheme === "file"
-      ? path.basename(vscode.workspace.workspaceFile.fsPath)
-      : undefined;
-    const workspaceName = logicalWorkspaceName(vscode.workspace.name, workspaceFileName);
+    const workspaceFile = vscode.workspace.workspaceFile;
+    if (workspaceFile === undefined || workspaceFile.scheme !== "file") {
+      return undefined;
+    }
+    const workspaceFileName = path.basename(workspaceFile.fsPath);
+    const workspaceName = savedWorkspaceName(workspaceFileName);
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceName === undefined || workspaceFolders === undefined) {
       return undefined;
@@ -167,6 +171,9 @@ class WorkspaceHaloController implements vscode.Disposable {
     }
 
     const vscodeDirectory = vscode.Uri.joinPath(root.uri, ".vscode");
+    if (path.relative(vscodeDirectory.fsPath, path.dirname(workspaceFile.fsPath)) !== "") {
+      return undefined;
+    }
     let directoryEntries: readonly [string, vscode.FileType][];
     try {
       directoryEntries = await vscode.workspace.fs.readDirectory(vscodeDirectory);
@@ -177,23 +184,27 @@ class WorkspaceHaloController implements vscode.Disposable {
     const fileNames = directoryEntries
       .filter(([, type]) => type === vscode.FileType.File)
       .map(([name]) => name);
-    const selection = selectLogo(workspaceName, fileNames);
-    if (selection.exactLogo === undefined) {
+    if (!fileNames.includes(workspaceFileName)) {
       return undefined;
     }
-
-    const logo = vscode.Uri.joinPath(vscodeDirectory, selection.exactLogo);
-    const logoStat = await vscode.workspace.fs.stat(logo);
+    const selection = selectLogo(workspaceName, fileNames);
+    const logo = selection.exactLogo === undefined
+      ? undefined
+      : vscode.Uri.joinPath(vscodeDirectory, selection.exactLogo);
+    const logoStat = logo === undefined ? undefined : await vscode.workspace.fs.stat(logo);
     const settings = this.resolveSettings(root);
-    const warning = selection.logoFiles.length > 1
-      ? `Workspace Halo found multiple logo files in ${vscodeDirectory.fsPath}: ${selection.logoFiles.join(", ")}. Keep only ${selection.exactLogo}.`
-      : undefined;
+    let warning: string | undefined;
+    if (selection.exactLogo !== undefined && selection.logoFiles.length > 1) {
+      warning = `Workspace Halo found multiple logo files in ${vscodeDirectory.fsPath}: ${selection.logoFiles.join(", ")}. Keep only ${selection.exactLogo}.`;
+    } else if (selection.exactLogo === undefined && selection.logoFiles.length > 0) {
+      warning = `Workspace Halo found logo files in ${vscodeDirectory.fsPath} but none is named ${workspaceName}.logo.png: ${selection.logoFiles.join(", ")}. The halo shows no logo.`;
+    }
     const fingerprint = JSON.stringify({
       workspaceName,
       root: root.uri.toString(),
-      logo: logo.toString(),
-      logoMtime: logoStat.mtime,
-      logoSize: logoStat.size,
+      logo: logo?.toString(),
+      logoMtime: logoStat?.mtime,
+      logoSize: logoStat?.size,
       settings,
       warning
     });
@@ -204,11 +215,11 @@ class WorkspaceHaloController implements vscode.Disposable {
   private resolveSettings(root: vscode.WorkspaceFolder): HaloSettings {
     const halo = vscode.workspace.getConfiguration("workspaceHalo", root.uri);
     const peacock = vscode.workspace.getConfiguration("peacock", root.uri);
-    const haloColor = workspaceScopedValue(halo.inspect<string>("color"), "#ff2d55");
+    const haloColor = optionalWorkspaceScopedValue(halo.inspect<string>("color"));
     const peacockColor = optionalWorkspaceScopedValue(peacock.inspect<string>("color"));
 
     return {
-      color: resolveSharedColor(peacockColor, haloColor, "#ff2d55"),
+      color: resolveSharedColor(peacockColor, haloColor, this.assignedColor()),
       borderWidth: workspaceScopedValue(halo.inspect<number>("borderWidth"), 12),
       borderMotif: workspaceScopedValue(
         halo.inspect<HaloSettings["borderMotif"]>("borderMotif"),
@@ -222,6 +233,20 @@ class WorkspaceHaloController implements vscode.Disposable {
       pillMargin: workspaceScopedValue(halo.inspect<number>("pillMargin"), 50),
       borderSegment: workspaceScopedValue(halo.inspect<number>("borderSegment"), 50)
     };
+  }
+
+  // assignedColor is the fallback when neither peacock.color nor
+  // workspaceHalo.color is set for the workspace: a color drawn at random
+  // once, then remembered in the workspace state so the same workspace keeps
+  // its identity across refreshes and restarts.
+  private assignedColor(): string {
+    const remembered = this.context.workspaceState.get<string>("assignedColor");
+    if (remembered !== undefined && isHexColor(remembered)) {
+      return remembered;
+    }
+    const assigned = randomHaloColor(Math.random);
+    void this.context.workspaceState.update("assignedColor", assigned);
+    return assigned;
   }
 
   private reportWarning(warning: string | undefined): void {
@@ -250,7 +275,6 @@ class WorkspaceHaloController implements vscode.Disposable {
     const args = [
       "--window-mode", "child",
       "--name", registration.workspaceName,
-      "--logo", registration.logo.fsPath,
       "--color", registration.settings.color,
       "--border-width", String(registration.settings.borderWidth),
       "--border-style", registration.settings.borderMotif,
@@ -264,12 +288,15 @@ class WorkspaceHaloController implements vscode.Disposable {
       "--log", logPath,
       "--focus-handshake"
     ];
+    if (registration.logo !== undefined) {
+      args.push("--logo", registration.logo.fsPath);
+    }
     if (registration.warning !== undefined) {
       args.push("--startup-warning", registration.warning);
     }
 
     this.output.info(
-      `Tracking ${registration.workspaceName}: root=${registration.root.uri.fsPath}, logo=${registration.logo.fsPath}.`
+      `Tracking ${registration.workspaceName}: root=${registration.root.uri.fsPath}, logo=${registration.logo?.fsPath ?? "none"}.`
     );
     this.output.info(`Native host log: ${logPath}`);
     const child = spawn(hostPath, args, {

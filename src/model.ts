@@ -11,14 +11,14 @@ export interface LogoSelection {
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 const WORKSPACE_FILE_SUFFIX = ".code-workspace";
 
-export function logicalWorkspaceName(
-  displayName: string | undefined,
+export function savedWorkspaceName(
   workspaceFileName: string | undefined
 ): string | undefined {
-  if (workspaceFileName?.toLowerCase().endsWith(WORKSPACE_FILE_SUFFIX)) {
-    return workspaceFileName.slice(0, -WORKSPACE_FILE_SUFFIX.length);
+  if (!workspaceFileName?.toLowerCase().endsWith(WORKSPACE_FILE_SUFFIX)) {
+    return undefined;
   }
-  return displayName;
+  const name = workspaceFileName.slice(0, -WORKSPACE_FILE_SUFFIX.length);
+  return name === "" ? undefined : name;
 }
 
 export function workspaceScopedValue<T>(
@@ -62,16 +62,42 @@ export function selectLogo(
   };
 }
 
+export function isHexColor(value: string): boolean {
+  return HEX_COLOR.test(value);
+}
+
 export function resolveSharedColor(
   peacockColor: string | undefined,
-  haloColor: string,
+  haloColor: string | undefined,
   fallback: string
 ): string {
   if (peacockColor !== undefined && HEX_COLOR.test(peacockColor)) {
     return peacockColor;
   }
-  if (HEX_COLOR.test(haloColor)) {
+  if (haloColor !== undefined && HEX_COLOR.test(haloColor)) {
     return haloColor;
   }
   return fallback;
+}
+
+// randomHaloColor draws a random hue at fixed saturation and value, so an
+// assigned color is always vivid enough to identify a window while the pill
+// contrast machinery keeps the name readable over it.
+export function randomHaloColor(random: () => number): string {
+  const sextant = random() * 6;
+  const value = 0.92;
+  const chroma = value * 0.85;
+  const secondary = chroma * (1 - Math.abs((sextant % 2) - 1));
+  const base = value - chroma;
+  const index = Math.floor(sextant) % 6;
+  const [red, green, blue]: readonly [number, number, number] =
+    index === 0 ? [chroma, secondary, 0]
+    : index === 1 ? [secondary, chroma, 0]
+    : index === 2 ? [0, chroma, secondary]
+    : index === 3 ? [0, secondary, chroma]
+    : index === 4 ? [secondary, 0, chroma]
+    : [chroma, 0, secondary];
+  const channel = (share: number): string =>
+    Math.round((share + base) * 255).toString(16).padStart(2, "0");
+  return `#${channel(red)}${channel(green)}${channel(blue)}`;
 }
