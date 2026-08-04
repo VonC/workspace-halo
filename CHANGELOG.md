@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.0.22
+
+- Show the halo for any workspace saved as `.vscode\<name>.code-workspace` in
+  its matching root folder: the logo file is now optional, and the halo
+  renders its border and name without one.
+- Make the saved workspace file location the single activation condition;
+  plain opened folders and workspace files saved elsewhere stay inert, and
+  logo files matching no workspace name raise a warning instead of silence.
+- Assign a vivid random color to a workspace with neither `peacock.color` nor
+  `workspaceHalo.color`, remember it in the workspace state, and reuse it
+  across restarts so unconfigured windows stay tellable apart.
+- Add `workspaceHalo.logoScale` (1 to 100, default 33) to size the logo's
+  longer side as a percentage of the window height, replacing the fixed
+  one-third rule; the value reaches the native host as `--logo-scale`.
+
 ## 0.0.21
 
 - Keep every VS Code halo visible while the cursor moves from the taskbar onto
