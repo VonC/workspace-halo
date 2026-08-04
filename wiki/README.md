@@ -1,7 +1,7 @@
 # Workspace Halo wiki
 
 Workspace Halo identifies each Visual Studio Code window on Windows 11 with a
-halo: a colored border, the workspace name, and its logo, drawn over the window
+halo: a colored border, the workspace name, and its optional logo, drawn over the window
 exactly when identification matters and hidden the rest of the time. The
 [project README](../README.md) shows the two-file quick start; this wiki holds
 everything else: the reasoning, the guided first runs, the task recipes, and

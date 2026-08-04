@@ -21,12 +21,12 @@ Alt+Tab). No single vantage point has both.
 
 The extension keeps the workspace side:
 
-- it derives the logical workspace name and selects the exact
-  `<name>.logo.png` file;
+- it derives the workspace name from the saved `.code-workspace` file and
+  selects the exact `<name>.logo.png` file when one exists;
 - it reads the workspace-scoped settings, including the Peacock color;
 - it launches one native host for its own window and passes everything as
   command-line flags;
-- it watches the logo file and the settings, and restarts the host when its
+- it watches the logo files and the settings, and restarts the host when its
   configuration fingerprint changes.
 
 The host keeps the window side:
@@ -42,9 +42,10 @@ The host keeps the window side:
 The host ships inside the VSIX as `bin/win32-x64/workspace-halo-host.exe`. It
 is not a separately installed component and it never outlives its window:
 closing the VS Code window or deactivating the extension stops the process.
-There is exactly one host process per VS Code window whose workspace has its
-exact logo; a window without the logo starts no process, contributes no UI, no
-command, and no status-bar item.
+There is exactly one host process per VS Code window whose workspace is saved
+as `.vscode\<name>.code-workspace`; a window without that saved workspace
+file starts no process, contributes no UI, no command, and no status-bar
+item.
 
 This keeps the cost model simple: unmarked workspaces pay nothing, and each
 marked workspace pays one tiny always-idle process whose only job is to know

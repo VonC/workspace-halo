@@ -10,7 +10,9 @@ The shared color is resolved in priority order:
 
 1. a workspace-scoped `peacock.color` value in `#rrggbb` form;
 2. the `workspaceHalo.color` setting;
-3. the built-in default `#ff2d55`.
+3. the color randomly assigned to the workspace: a vivid random hue drawn
+   the first time neither setting exists, then remembered in the workspace
+   state so the workspace keeps the same identity across restarts.
 
 Peacock wins by design: if the
 [Peacock](https://marketplace.visualstudio.com/items?itemName=johnpapa.vscode-peacock)

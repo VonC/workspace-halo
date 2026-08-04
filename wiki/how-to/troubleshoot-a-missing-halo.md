@@ -10,27 +10,30 @@ Workspace Halo only runs on Windows 11 with stable desktop VS Code
 (`Code.exe`). VS Code Insiders, vscode.dev, web VS Code, and remote UI on
 another operating system never show a halo.
 
-## Check the two names match exactly
+## Check the saved workspace file
 
-1. The workspace name: for a saved workspace it is the `.code-workspace`
-   file name without its suffix; for a plain opened folder it is the folder
-   name.
+1. The workspace must be saved on disk: the workspace name is the
+   `.code-workspace` file name without its suffix. A plain opened folder or
+   an untitled workspace never shows a halo.
 2. One root folder name must equal that workspace name, character for
    character (case-sensitive, spaces preserved), or be listed in
    `workspaceHalo.rootSynonyms` as described in
    [accept a differently named root folder](accept-a-differently-named-root-folder.md).
-3. The logo must be `.vscode\<workspace name>.logo.png` inside that root
-   folder, with the same exact case.
+3. The workspace file must sit inside that root folder as
+   `.vscode\<workspace name>.code-workspace`, with the same exact case.
 
 While any of these is false the extension is silent by design: no halo, no
 host process, no output.
 
-## Check the logo file itself
+## Check the optional logo file
 
-The file must be a readable PNG; the host decodes it at startup and exits on
-failure. Also remove any other `*.logo.png` files from the same `.vscode`
-directory: the exact one still wins, but a warning is raised until the extras
-are gone.
+A logo is not required: without one the halo shows the border and the name
+only. To display a logo, the file must be
+`.vscode\<workspace name>.logo.png` inside the matched root folder, matching
+the workspace name exactly (case included), and a readable PNG; the host
+decodes it at startup and exits on failure. When `*.logo.png` files exist
+but the exact name is missing, or extras sit beside it, a warning lists them
+until they are renamed or removed.
 
 ## Check the binding
 
@@ -48,7 +51,7 @@ to its window:
 Open **View > Output** and select **Workspace Halo**:
 
 - a `Tracking <name>` line confirms the activation conditions are met and
-  shows the root and logo paths;
+  shows the root and the logo path (`logo=none` without a logo file);
 - `Native host started (pid=...)` and the `Native host log:` line locate the
   host and its `native-host.log`;
 - startup errors, binding rejections, and host exits are reported here.

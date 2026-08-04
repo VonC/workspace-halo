@@ -9,7 +9,7 @@ make it exit with code 1 and a `configuration error` message on stderr.
 | Flag | Default | Meaning |
 | --- | --- | --- |
 | `--name` | (required) | Workspace name displayed in the overlay |
-| `--logo` | (required) | Path of the PNG logo |
+| `--logo` | (none) | Optional path of the PNG logo; without it the halo draws no logo |
 | `--color` | `#ff2d55` | Shared border and text color, `#RGB` or `#RRGGBB` |
 | `--border-width` | `12` | Border width in pixels, positive |
 | `--border-style` | `solid` | `solid`, `double`, `dashed`, or `dotted` |

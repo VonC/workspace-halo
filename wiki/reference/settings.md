@@ -14,7 +14,7 @@ the renderer.
 
 | Setting | Type | Default | Range | Meaning |
 | --- | --- | --- | --- | --- |
-| `workspaceHalo.color` | string | `#ff2d55` | `#rrggbb` | Shared border and workspace-name color |
+| `workspaceHalo.color` | string | (assigned) | `#rrggbb` | Shared border and workspace-name color; when unset, a random color is assigned to the workspace and remembered |
 | `workspaceHalo.borderWidth` | integer | `12` | 1 to 64 | Border width in pixels |
 | `workspaceHalo.borderMotif` | string | `solid` | `solid`, `double`, `dashed`, `dotted` | Continuous border motif, drawn when `borderSegment` is 0 |
 | `workspaceHalo.borderSegment` | integer | `50` | 0 or more | Length in pixels of the alternating opaque black border segments; 0 draws the continuous motif instead |
@@ -31,7 +31,8 @@ the renderer.
 A workspace-scoped `peacock.color` matching the regular expression
 `^#[0-9a-fA-F]{6}$` takes priority over `workspaceHalo.color`. Any other form
 (named colors, three-digit hex, missing value) leaves `workspaceHalo.color`
-in charge, with `#ff2d55` as the final fallback. The border and the name
+in charge, with the workspace's remembered randomly assigned color as the
+final fallback. The border and the name
 always share the resulting color; the pill derives its own tone from it, as
 explained in
 [how colors keep their contrast](../explanation/how-colors-keep-their-contrast.md).

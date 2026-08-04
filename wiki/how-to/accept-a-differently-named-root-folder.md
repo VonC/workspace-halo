@@ -17,15 +17,17 @@ block of the `.code-workspace` file:
 The extension then inspects the `tools` root folder as if it carried the
 workspace name.
 
-## Keep the logo named after the workspace
+## Keep the files named after the workspace
 
-The logo file name never changes with synonyms: it always repeats the
-workspace name, inside the matched root folder.
+The workspace file and the optional logo never change their names with
+synonyms: both always repeat the workspace name, inside the matched root
+folder's `.vscode` directory.
 
 ```text
 tools/
 `-- .vscode/
-    `-- my-tools.logo.png
+    |-- my-tools.code-workspace
+    `-- my-tools.logo.png      (optional)
 ```
 
 ## Know which root wins in a multi-root workspace

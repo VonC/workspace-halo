@@ -3,9 +3,9 @@
 ![Windows logo: four blue panes](images/logo-windows.png)
 
 Workspace Halo identifies each Visual Studio Code window on **Windows 11**
-with a halo: a colored border, the workspace name, and its logo, drawn over
-the window exactly when you need to tell your workspaces apart, and hidden
-while you work. It is a Windows-only extension: the overlay is drawn by a
+with a halo: a colored border, the workspace name, and its optional logo,
+drawn over the window exactly when you need to tell your workspaces apart,
+and hidden while you work. It is a Windows-only extension: the overlay is drawn by a
 Win32 native host.
 
 ![Workspace Halo identifying several VS Code workspaces in windows and Alt+Tab](images/screen-workspace-halo.png)
@@ -15,26 +15,27 @@ Win32 native host.
 Install
 [Workspace Halo from the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=vonc.workspace-halo)
 from the Extensions view, or run
-`code --install-extension vonc.workspace-halo`. Then give each project two
-files whose names match the project folder exactly. In a folder named
-`my-project`:
+`code --install-extension vonc.workspace-halo`. Then save each project's
+workspace inside its own folder. In a folder named `my-project`:
 
 1. Save the workspace as `.vscode\my-project.code-workspace`
    (**File > Save Workspace As...**): the workspace is now named after its
    folder.
-2. Add a PNG logo as `.vscode\my-project.logo.png`, also named after the
-   workspace.
+2. Optionally, add a PNG logo as `.vscode\my-project.logo.png`, also named
+   after the workspace, to show it in the halo.
 
 ```text
 my-project/
 `-- .vscode/
     |-- my-project.code-workspace
-    `-- my-project.logo.png
+    `-- my-project.logo.png      (optional)
 ```
 
-These are the two conditions for the halo effect. Their names must match the
-project folder exactly, including case. When either file is missing, Workspace
-Halo stays completely inert for that window.
+The saved workspace file is the one condition for the halo effect: its name
+must match the project folder exactly, including case, and it must sit in
+that folder's `.vscode` directory. When the file is missing or saved
+elsewhere, Workspace Halo stays completely inert for that window. The logo
+is optional: without it, the halo shows the border and the name only.
 
 Need a project logo? Clone
 [llm-shared](https://github.com/VonC/llm-shared) and use its `/isolate-logos`
@@ -82,7 +83,9 @@ Workspace Halo pairs with the
 extension: when the workspace has a Peacock color (a `#rrggbb` value of
 `peacock.color` saved for that workspace), the halo border and name take that
 exact color, so one hue identifies the workspace inside and around the
-window. Otherwise `workspaceHalo.color` applies.
+window. Otherwise `workspaceHalo.color` applies, and when neither color is
+set for the workspace, a random color is assigned and remembered, so every
+haloed window is identifiable from the start.
 
 ## Everything else is in the wiki
 

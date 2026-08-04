@@ -1,8 +1,8 @@
 # Tutorial 01 - Halo your first workspace
 
-In this tutorial you create a fresh workspace, mark it with a logo, and watch
-its halo appear on every display trigger. At the end you will recognize each
-trigger and know where the extension logs what it does.
+In this tutorial you create a fresh workspace, watch its halo appear on
+every display trigger, and mark it with a logo. At the end you will
+recognize each trigger and know where the extension logs what it does.
 
 ## What you need before starting
 
@@ -12,7 +12,7 @@ trigger and know where the extension logs what it does.
   [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=vonc.workspace-halo).
   Contributors can instead build and install the local VSIX as described in
   [install or update the extension](../how-to/install-or-update-the-extension.md).
-- Any square-ish PNG image to use as a logo.
+- Optionally, any square-ish PNG image to use as a logo.
 
 If you need a logo, clone [llm-shared](https://github.com/VonC/llm-shared),
 use its
@@ -28,12 +28,22 @@ generated image or logo sheet.
    (create the `.vscode` folder in the dialog), and save the workspace as
    `halo-demo.code-workspace`.
 
+```text
+halo-demo/
+`-- .vscode/
+    `-- halo-demo.code-workspace
+```
+
 VS Code reopens the window on the saved workspace and its title now shows
 `halo-demo (Workspace)`. The workspace is named `halo-demo`, after its file
-name, and it matches its folder name: that match is the first activation
-condition.
+name, it matches its folder name, and its file sits in that folder's
+`.vscode` directory: that is the activation condition. Within a second or
+two the activation halo appears: a colored border around the window and the
+name `halo-demo` on its pill in the center. With no color configured, the
+border color was assigned at random and is remembered for this workspace;
+[tutorial 02 - Style the halo](02-style-the-halo.md) shows how to choose it.
 
-## Step 2 - Add the logo
+## Step 2 - Add the logo (optional)
 
 Copy your PNG into the workspace as `.vscode\halo-demo.logo.png`. The file
 name must repeat the workspace name exactly, case included.
@@ -45,10 +55,9 @@ halo-demo/
     `-- halo-demo.logo.png
 ```
 
-Within a second or two the activation halo appears: a pink `#ff2d55` border
-around the window, the name `halo-demo` on its pill in the center, and your
-logo in the lower right corner. No reload is needed; the extension watches
-`.vscode` for logo files.
+Within a second or two the halo restarts with your logo in the lower right
+corner. No reload is needed; the extension watches `.vscode` for logo files.
+Skipping this step only skips the logo: every trigger below works the same.
 
 ## Step 3 - Acknowledge the activation halo
 
@@ -78,7 +87,8 @@ Try each ambient trigger:
 ## Step 6 - Read what happened
 
 Open **View > Output** and select **Workspace Halo** in the dropdown. You
-will see the tracking line with the root and logo paths, the native host
+will see the tracking line with the root and logo paths (`logo=none` without
+a logo), the native host
 process id, and the path of its `native-host.log`, where each visibility
 change is logged with its reason.
 

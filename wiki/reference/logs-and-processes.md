@@ -8,12 +8,13 @@ Open **View > Output** and select **Workspace Halo**. The extension logs
 there:
 
 - `Tracking <name>: root=..., logo=...` when the activation conditions are
-  met;
+  met (`logo=none` for a workspace without a logo file);
 - `Native host log: <path>` with the exact per-window log location;
 - `Native host started (pid=...)` and
   `Native host exited (code=..., signal=...)`;
 - binding confirmations (`Native host confirmed this VS Code window`);
-- the multiple-logo warning and any startup errors;
+- the logo warnings (multiple logo files, or none matching the workspace
+  name) and any startup errors;
 - every non-protocol output line of the host process.
 
 ## The native host log file
@@ -31,8 +32,8 @@ A host started by hand without `--log` writes to
 ## The host processes
 
 There is exactly one `workspace-halo-host.exe` process per active VS Code
-window whose workspace has its exact logo; unmarked windows start none. An
-independent check from PowerShell:
+window whose workspace is saved as `.vscode\<name>.code-workspace`; other
+windows start none. An independent check from PowerShell:
 
 ```powershell
 Get-Process workspace-halo-host
