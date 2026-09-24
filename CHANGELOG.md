@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.0.23
+
+- Show the halo for a linked Git worktree whatever its folder is named, as
+  long as its main working tree holds the same
+  `.vscode\<name>.code-workspace`; the worktree's own logo is used.
+- Draw the worktree branch in italic under the workspace name, same font and
+  size, with both lines centered together; a detached HEAD shows the short
+  commit, and a branch switch redraws the line.
+- Add `workspaceHalo.showBranch` (default `false`) to show the branch line in
+  any Git working tree; the native host receives it as `--branch`.
+- Memorize the Git detection in the workspace state, so refreshes only
+  re-read HEAD instead of probing the repository layout again.
+
 ## 0.0.22
 
 - Show the halo for any workspace saved as `.vscode\<name>.code-workspace` in
