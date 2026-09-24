@@ -599,6 +599,27 @@ func TestPillBoundsHugTheInk(t *testing.T) {
 	}
 }
 
+func TestOverlayLinesAddAnItalicBranchOnlyWhenSet(t *testing.T) {
+	lines := overlayLines(config{name: "halo"})
+	if len(lines) != 1 || lines[0].italic {
+		t.Fatalf("name only: got %d lines, want one upright line", len(lines))
+	}
+	lines = overlayLines(config{name: "halo", branch: "feat/x"})
+	if len(lines) != 2 || lines[0].italic || !lines[1].italic {
+		t.Fatalf("name and branch: got %+v, want an upright name then an italic branch", lines)
+	}
+}
+
+func TestStackLinesCentersTheWholeStack(t *testing.T) {
+	if tops := stackLines(600, []int{100}); tops[0] != 250 {
+		t.Errorf("lone name top = %d, want 250", tops[0])
+	}
+	tops := stackLines(600, []int{100, 100})
+	if tops[0] != 200 || tops[1] != 300 {
+		t.Errorf("name and branch tops = %v, want [200 300]", tops)
+	}
+}
+
 func TestDitherCoverageMatchesOpacity(t *testing.T) {
 	coverage := func(opacity int) float64 {
 		kept := 0

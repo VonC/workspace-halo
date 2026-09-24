@@ -303,6 +303,7 @@ type displayConfigModeInfo struct {
 
 type config struct {
 	name           string
+	branch         string
 	logo           image.Image
 	color          color.NRGBA
 	borderWidth    int
@@ -411,7 +412,7 @@ func main() {
 	}
 
 	logger.Printf("bound to hwnd=0x%X class=%q title=%q", target, windowClass(target), windowTitle(target))
-	logger.Printf("overlay hwnd=0x%X name=%q mode=%s", app.overlay, cfg.name, cfg.windowMode)
+	logger.Printf("overlay hwnd=0x%X name=%q branch=%q mode=%s", app.overlay, cfg.name, cfg.branch, cfg.windowMode)
 
 	interrupts := make(chan os.Signal, 1)
 	signal.Notify(interrupts, os.Interrupt)
@@ -426,6 +427,7 @@ func parseFlags() (config, error) {
 	var cfg config
 	var logoPath, colorValue, hwndValue string
 	flag.StringVar(&cfg.name, "name", "", "workspace name displayed in the overlay")
+	flag.StringVar(&cfg.branch, "branch", "", "optional worktree branch displayed in italic under the name")
 	flag.StringVar(&logoPath, "logo", "", "optional PNG logo path; without it the halo draws no logo")
 	flag.StringVar(&colorValue, "color", "#ff2d55", "shared border and text color")
 	flag.IntVar(&cfg.borderWidth, "border-width", 12, "border width in pixels")
@@ -1656,31 +1658,84 @@ func copyCanvasToBGRA(dst []byte, src *image.NRGBA) {
 	}
 }
 
+// haloLine is one centered text line of the overlay: the workspace name, then
+// for a linked worktree its branch, in italic.
+type haloLine struct {
+	text   []uint16
+	italic bool
+}
+
+func overlayLines(cfg config) []haloLine {
+	var lines []haloLine
+	for _, candidate := range []struct {
+		value  string
+		italic bool
+	}{{cfg.name, false}, {cfg.branch, true}} {
+		text, _ := syscall.UTF16FromString(candidate.value)
+		if len(text) > 1 {
+			lines = append(lines, haloLine{text: text, italic: candidate.italic})
+		}
+	}
+	return lines
+}
+
+// stackLines returns the top of each line so the whole stack is vertically
+// centered: a lone name sits in the middle, and a name over a branch moves up
+// by half the branch height while the branch sits right below it.
+func stackLines(h int, heights []int) []int {
+	total := 0
+	for _, height := range heights {
+		total += height
+	}
+	tops := make([]int, len(heights))
+	y := (h - total) / 2
+	for i, height := range heights {
+		tops[i] = y
+		y += height
+	}
+	return tops
+}
+
+func measureText(hdc, font uintptr, text []uint16) size {
+	previous, _, _ := procSelectObject.Call(hdc, font)
+	var measured size
+	procGetTextExtentPoint32W.Call(hdc, uintptr(unsafe.Pointer(&text[0])), uintptr(len(text)-1), uintptr(unsafe.Pointer(&measured)))
+	procSelectObject.Call(hdc, previous)
+	return measured
+}
+
 func drawWorkspaceName(hdc uintptr, pixels []byte, w, h int, cfg config) error {
-	text, _ := syscall.UTF16FromString(cfg.name)
-	textLength := len(text) - 1
-	if textLength <= 0 {
+	lines := overlayLines(cfg)
+	if len(lines) == 0 {
 		return nil
 	}
 	face, _ := syscall.UTF16PtrFromString(cfg.fontFamily)
 	maxHeight := max(1, h/3)
 	maxWidth := max(1, w-2*max(cfg.pillMargin, cfg.borderWidth+16))
-	fontSize := findFontSize(hdc, face, text, textLength, cfg.fontWeight, maxWidth, maxHeight, cfg.pill)
-	font := createFont(fontSize, cfg.fontWeight, face)
-	if font == 0 {
-		return errors.New("CreateFontW failed")
+	fontSize := findFontSize(hdc, face, lines, cfg.fontWeight, maxWidth, maxHeight, cfg.pill)
+	fonts := make([]uintptr, len(lines))
+	extents := make([]size, len(lines))
+	heights := make([]int, len(lines))
+	for i, line := range lines {
+		font := createFont(fontSize, cfg.fontWeight, line.italic, face)
+		if font == 0 {
+			return errors.New("CreateFontW failed")
+		}
+		defer procDeleteObject.Call(font)
+		fonts[i] = font
+		extents[i] = measureText(hdc, font, line.text)
+		heights[i] = int(extents[i].CY)
 	}
-	defer procDeleteObject.Call(font)
-	previous, _, _ := procSelectObject.Call(hdc, font)
+	tops := stackLines(h, heights)
+	lefts := make([]int, len(lines))
+	for i := range lines {
+		lefts[i] = (w - int(extents[i].CX)) / 2
+		if cfg.pill {
+			drawNamePill(pixels, w, h, lefts[i], tops[i], int(extents[i].CX), heights[i], cfg)
+		}
+	}
+	previous, _, _ := procSelectObject.Call(hdc, fonts[0])
 	defer procSelectObject.Call(hdc, previous)
-	var measured size
-	procGetTextExtentPoint32W.Call(hdc, uintptr(unsafe.Pointer(&text[0])), uintptr(textLength), uintptr(unsafe.Pointer(&measured)))
-	x := (w - int(measured.CX)) / 2
-	y := (h - int(measured.CY)) / 2
-
-	if cfg.pill {
-		drawNamePill(pixels, w, h, x, y, int(measured.CX), int(measured.CY), cfg)
-	}
 
 	// Give fully transparent pixels a sentinel RGB value. GDI does not update
 	// the alpha channel, so the sentinel lets us identify anti-aliased glyph
@@ -1691,12 +1746,16 @@ func drawWorkspaceName(hdc uintptr, pixels []byte, w, h int, cfg config) error {
 		}
 	}
 	procSetBkMode.Call(hdc, transparentBkMode)
-	if cfg.shadow {
-		procSetTextColor.Call(hdc, uintptr(colorRef(color.NRGBA{R: 32, G: 32, B: 32, A: 255})))
-		procTextOutW.Call(hdc, uintptr(uint32(x+3)), uintptr(uint32(y+3)), uintptr(unsafe.Pointer(&text[0])), uintptr(textLength))
+	for i, line := range lines {
+		procSelectObject.Call(hdc, fonts[i])
+		x, y, text, textLength := lefts[i], tops[i], line.text, len(line.text)-1
+		if cfg.shadow {
+			procSetTextColor.Call(hdc, uintptr(colorRef(color.NRGBA{R: 32, G: 32, B: 32, A: 255})))
+			procTextOutW.Call(hdc, uintptr(uint32(x+3)), uintptr(uint32(y+3)), uintptr(unsafe.Pointer(&text[0])), uintptr(textLength))
+		}
+		procSetTextColor.Call(hdc, uintptr(colorRef(cfg.color)))
+		procTextOutW.Call(hdc, uintptr(uint32(x)), uintptr(uint32(y)), uintptr(unsafe.Pointer(&text[0])), uintptr(textLength))
 	}
-	procSetTextColor.Call(hdc, uintptr(colorRef(cfg.color)))
-	procTextOutW.Call(hdc, uintptr(uint32(x)), uintptr(uint32(y)), uintptr(unsafe.Pointer(&text[0])), uintptr(textLength))
 	for i := 0; i < len(pixels); i += 4 {
 		if pixels[i+3] == 0 {
 			if pixels[i] == 1 && pixels[i+1] == 2 && pixels[i+2] == 3 {
@@ -1825,28 +1884,33 @@ func drawNamePill(pixels []byte, w, h, textX, textY, textW, textH int, cfg confi
 	}
 }
 
-// findFontSize fits the name into maxWidth and maxHeight; with the pill on,
-// the fitted width includes the pill cap overhang of a third of the text
-// height on each side, so the whole pill respects the margins.
-func findFontSize(hdc uintptr, face *uint16, text []uint16, textLength, weight, maxWidth, maxHeight int, pill bool) int {
+// findFontSize fits every line, at one shared size, into maxWidth and
+// maxHeight; with the pill on, the fitted width includes the pill cap
+// overhang of a third of the text height on each side, so the whole pill
+// respects the margins.
+func findFontSize(hdc uintptr, face *uint16, lines []haloLine, weight, maxWidth, maxHeight int, pill bool) int {
 	low, high, best := 1, maxHeight, 1
 	for low <= high {
 		candidate := (low + high) / 2
-		font := createFont(candidate, weight, face)
-		if font == 0 {
-			high = candidate - 1
-			continue
+		fits := true
+		for _, line := range lines {
+			font := createFont(candidate, weight, line.italic, face)
+			if font == 0 {
+				fits = false
+				break
+			}
+			measured := measureText(hdc, font, line.text)
+			procDeleteObject.Call(font)
+			width := int(measured.CX)
+			if pill {
+				width += 2 * (int(measured.CY) / 3)
+			}
+			if width > maxWidth || int(measured.CY) > maxHeight {
+				fits = false
+				break
+			}
 		}
-		previous, _, _ := procSelectObject.Call(hdc, font)
-		var measured size
-		procGetTextExtentPoint32W.Call(hdc, uintptr(unsafe.Pointer(&text[0])), uintptr(textLength), uintptr(unsafe.Pointer(&measured)))
-		procSelectObject.Call(hdc, previous)
-		procDeleteObject.Call(font)
-		width := int(measured.CX)
-		if pill {
-			width += 2 * (int(measured.CY) / 3)
-		}
-		if width <= maxWidth && int(measured.CY) <= maxHeight {
+		if fits {
 			best = candidate
 			low = candidate + 1
 		} else {
@@ -1856,10 +1920,14 @@ func findFontSize(hdc uintptr, face *uint16, text []uint16, textLength, weight, 
 	return best
 }
 
-func createFont(pixelHeight, weight int, face *uint16) uintptr {
+func createFont(pixelHeight, weight int, italic bool, face *uint16) uintptr {
+	var italicFlag uintptr
+	if italic {
+		italicFlag = 1
+	}
 	font, _, _ := procCreateFontW.Call(
 		uintptr(uint32(int32(-pixelHeight))), 0, 0, 0, uintptr(weight),
-		0, 0, 0, defaultCharset, 0, 0, antialiasedQuality, defaultPitch,
+		italicFlag, 0, 0, defaultCharset, 0, 0, antialiasedQuality, defaultPitch,
 		uintptr(unsafe.Pointer(face)),
 	)
 	return font
