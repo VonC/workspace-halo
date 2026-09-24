@@ -37,6 +37,12 @@ that folder's `.vscode` directory. When the file is missing or saved
 elsewhere, Workspace Halo stays completely inert for that window. The logo
 is optional: without it, the halo shows the border and the name only.
 
+A linked Git worktree of the project gets the same halo whatever its folder
+is named, with its branch in italic under the name: see
+[show the branch of a Git worktree](wiki/how-to/show-the-branch-of-a-git-worktree.md).
+Set `workspaceHalo.showBranch` to `true` to show the branch in any Git
+working tree.
+
 Need a project logo? Clone
 [llm-shared](https://github.com/VonC/llm-shared) and use its `/isolate-logos`
 skill with an AI-generated logo or logo sheet. Its

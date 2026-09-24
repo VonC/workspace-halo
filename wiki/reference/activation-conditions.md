@@ -29,8 +29,13 @@ Exactly one root folder is inspected:
 2. when none matches, the first folder in root order whose name appears in
    the `workspaceHalo.rootSynonyms` array.
 
-If neither exists, or the matched root is not a local `file` folder, the
-extension stays inactive. All name comparisons are case-sensitive and
+When neither exists, a linked Git worktree still qualifies, whatever its
+folder is named: the root is then the folder whose `.vscode` directory holds
+the workspace file, provided that folder is a linked worktree whose main
+working tree also holds `.vscode<workspace name>.code-workspace`.
+
+If none of these holds, or the matched root is not a local `file` folder,
+the extension stays inactive. All name comparisons are case-sensitive and
 preserve spaces.
 
 ## Workspace file location requirement
@@ -53,6 +58,15 @@ several exist beside the exact one, a warning listing the files is written
 to the developer console, the **Workspace Halo** output channel, and the
 native-host log; the exact logo is still used when present.
 
+## Branch line
+
+A root that is a linked worktree of the same workspace shows its current
+branch (or the abbreviated commit when HEAD is detached) in italic under the
+name. Any other Git root shows it only when `workspaceHalo.showBranch` is
+`true`. The Git detection (where HEAD lives, whether the root is such a
+worktree) runs once and is memorized in the workspace state; later refreshes
+only re-read HEAD, and a memo whose HEAD file is gone is detected again.
+
 ## Reactions to change
 
 The extension watches its conditions and reconciles after a 150 millisecond
@@ -63,10 +77,11 @@ debounce:
 | `**/.vscode/*.logo.png` created, changed, or deleted | re-evaluate; restart or stop the host |
 | Workspace folders added or removed | re-evaluate the root selection |
 | `workspaceHalo.*` or `peacock.color` configuration | re-evaluate the settings fingerprint |
+| HEAD of the checkout, while a branch line shows | re-evaluate the branch |
 | Window gains focus | immediate re-evaluation |
 
 A configuration fingerprint (workspace name, root, logo path with size and
-modification time when a logo exists, resolved settings, warning state)
+modification time when a logo exists, branch, resolved settings, warning state)
 decides whether the
 running host is kept, restarted, or stopped. A host that exits on its own is
 restarted after one second while the conditions still hold.

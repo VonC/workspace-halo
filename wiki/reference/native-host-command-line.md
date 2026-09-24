@@ -9,6 +9,7 @@ make it exit with code 1 and a `configuration error` message on stderr.
 | Flag | Default | Meaning |
 | --- | --- | --- |
 | `--name` | (required) | Workspace name displayed in the overlay |
+| `--branch` | (none) | Optional Git branch drawn in italic under the name, same font and size; the two lines are centered together |
 | `--logo` | (none) | Optional path of the PNG logo; without it the halo draws no logo |
 | `--color` | `#ff2d55` | Shared border and text color, `#RGB` or `#RRGGBB` |
 | `--border-width` | `12` | Border width in pixels, positive |

@@ -25,6 +25,7 @@ the renderer.
 | `workspaceHalo.namePill` | boolean | `true` | | Draw the contrast pill behind the name |
 | `workspaceHalo.pillOpacity` | integer | `100` | 0 to 100 | Pill opacity percentage, rendered by ordered dithering |
 | `workspaceHalo.pillMargin` | integer | `50` | 0 or more | Minimal left and right margin, in pixels, between the window edges and the pill with its name |
+| `workspaceHalo.showBranch` | boolean | `false` | | Always show the current Git branch in italic under the name; a linked worktree shows it even when off |
 | `workspaceHalo.rootSynonyms` | string array | `[]` | | Extra root folder names accepted when none matches the workspace name; window-scoped, so it belongs in the workspace settings |
 
 ## Peacock color priority

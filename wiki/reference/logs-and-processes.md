@@ -7,8 +7,9 @@ Every observable trace of Workspace Halo, and where to find it.
 Open **View > Output** and select **Workspace Halo**. The extension logs
 there:
 
-- `Tracking <name>: root=..., logo=...` when the activation conditions are
-  met (`logo=none` for a workspace without a logo file);
+- `Tracking <name>: root=..., logo=..., branch=...` when the activation
+  conditions are met (`logo=none` for a workspace without a logo file,
+  `branch=none` without a branch line);
 - `Native host log: <path>` with the exact per-window log location;
 - `Native host started (pid=...)` and
   `Native host exited (code=..., signal=...)`;

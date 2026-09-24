@@ -19,6 +19,9 @@ another operating system never show a halo.
    character (case-sensitive, spaces preserved), or be listed in
    `workspaceHalo.rootSynonyms` as described in
    [accept a differently named root folder](accept-a-differently-named-root-folder.md).
+   A linked Git worktree is the exception: its folder name does not matter
+   when its main working tree holds the same workspace file (see
+   [show the branch of a Git worktree](show-the-branch-of-a-git-worktree.md)).
 3. The workspace file must sit inside that root folder as
    `.vscode\<workspace name>.code-workspace`, with the same exact case.
 
@@ -51,7 +54,8 @@ to its window:
 Open **View > Output** and select **Workspace Halo**:
 
 - a `Tracking <name>` line confirms the activation conditions are met and
-  shows the root and the logo path (`logo=none` without a logo file);
+  shows the root, the logo path (`logo=none` without a logo file), and the
+  displayed branch (`branch=none` without a branch line);
 - `Native host started (pid=...)` and the `Native host log:` line locate the
   host and its `native-host.log`;
 - startup errors, binding rejections, and host exits are reported here.

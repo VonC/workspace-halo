@@ -39,6 +39,7 @@ Recipes for one precise goal each, for readers who already know the basics.
 
 - [Take the halo color from Peacock](how-to/take-the-halo-color-from-peacock.md)
 - [Accept a differently named root folder](how-to/accept-a-differently-named-root-folder.md)
+- [Show the branch of a Git worktree](how-to/show-the-branch-of-a-git-worktree.md)
 - [Troubleshoot a missing halo](how-to/troubleshoot-a-missing-halo.md)
 - [Install or update the extension](how-to/install-or-update-the-extension.md)
 - [Set up the build toolchain](how-to/set-up-the-build-toolchain.md)
