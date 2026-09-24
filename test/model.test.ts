@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  branchFromHead,
+  gitdirPointer,
   isHexColor,
   optionalWorkspaceScopedValue,
   randomHaloColor,
@@ -48,6 +50,20 @@ test("a root synonym is accepted when no folder name matches", () => {
     "my-project"
   );
   assert.equal(selectRootName("my-project", ["a", "b"], ["b", "a"]), "a");
+});
+
+test("a linked worktree is recognized by its gitdir pointer", () => {
+  assert.equal(
+    gitdirPointer("gitdir: C:/git/halo/.git/worktrees/feat\n"),
+    "C:/git/halo/.git/worktrees/feat"
+  );
+  assert.equal(gitdirPointer("[core]\n"), undefined);
+});
+
+test("the worktree branch comes from its HEAD", () => {
+  assert.equal(branchFromHead("ref: refs/heads/feat/two-lines\n"), "feat/two-lines");
+  assert.equal(branchFromHead("0123456789abcdef0123456789abcdef01234567\n"), "0123456");
+  assert.equal(branchFromHead("garbage"), undefined);
 });
 
 test("workspace Peacock color takes precedence over Workspace Halo color", () => {

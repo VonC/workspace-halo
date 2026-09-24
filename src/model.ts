@@ -62,6 +62,25 @@ export function selectLogo(
   };
 }
 
+// gitdirPointer reads the `.git` file of a linked worktree, which holds a
+// single `gitdir: <path>` line; a main working tree has a `.git` directory
+// instead, and any other content means no linked worktree.
+export function gitdirPointer(dotGitFile: string): string | undefined {
+  const match = /^gitdir:\s*(.+?)\s*$/m.exec(dotGitFile);
+  return match?.[1];
+}
+
+// branchFromHead names what a HEAD file points at: the branch without its
+// refs/heads/ prefix, or the abbreviated commit when HEAD is detached.
+export function branchFromHead(head: string): string | undefined {
+  const trimmed = head.trim();
+  const symbolic = /^ref:\s*(.+)$/.exec(trimmed)?.[1];
+  if (symbolic !== undefined) {
+    return symbolic.replace(/^refs\/heads\//, "");
+  }
+  return /^[0-9a-f]{40,64}$/i.test(trimmed) ? trimmed.slice(0, 7) : undefined;
+}
+
 export function isHexColor(value: string): boolean {
   return HEX_COLOR.test(value);
 }

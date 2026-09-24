@@ -2,7 +2,7 @@
   "name": "workspace-halo",
   "displayName": "Workspace Halo",
   "description": "Identify VS Code workspace windows with a configurable Alt+Tab halo.",
-  "version": "0.0.22",
+  "version": "0.0.23",
   "publisher": "vonc",
   "license": "MIT",
   "repository": {
@@ -138,6 +138,12 @@
           "maximum": 100,
           "scope": "resource",
           "description": "Length of the logo's longer side as a percentage of the window height, when a logo file exists. The logo keeps its aspect ratio and stays inside the border padding."
+        },
+        "workspaceHalo.showBranch": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "description": "Always show the current Git branch in italic under the workspace name. A linked Git worktree shows its branch even when this is off."
         }
       }
     }

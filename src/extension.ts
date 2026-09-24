@@ -1,7 +1,10 @@
 import { ChildProcess, spawn } from "node:child_process";
+import { readdir, readFile, stat } from "node:fs/promises";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import {
+  branchFromHead,
+  gitdirPointer,
   isHexColor,
   optionalWorkspaceScopedValue,
   randomHaloColor,
@@ -24,12 +27,22 @@ interface HaloSettings {
   readonly pillMargin: number;
   readonly borderSegment: number;
   readonly logoScale: number;
+  readonly showBranch: boolean;
+}
+
+interface GitCheckout {
+  readonly root: string;
+  readonly workspaceFileName: string;
+  readonly head?: string;
+  readonly linkedWorktree: boolean;
 }
 
 interface Registration {
   readonly workspaceName: string;
   readonly root: vscode.WorkspaceFolder;
   readonly logo?: vscode.Uri;
+  readonly branch?: string;
+  readonly branchHead?: string;
   readonly settings: HaloSettings;
   readonly warning?: string;
   readonly fingerprint: string;
@@ -44,6 +57,8 @@ class WorkspaceHaloController implements vscode.Disposable {
   private focusToken = 0;
   private bindingRetryTimer: NodeJS.Timeout | undefined;
   private registration: Registration | undefined;
+  private headWatcher: vscode.Disposable | undefined;
+  private headWatchPath: string | undefined;
   private refreshTimer: NodeJS.Timeout | undefined;
   private refreshGeneration = 0;
   private lastWarning: string | undefined;
@@ -97,6 +112,7 @@ class WorkspaceHaloController implements vscode.Disposable {
       disposable.dispose();
     }
     this.disposables.length = 0;
+    this.watchWorktreeHead(undefined);
     void this.stopHost();
     this.output.dispose();
   }
@@ -129,6 +145,7 @@ class WorkspaceHaloController implements vscode.Disposable {
     this.reportWarning(next?.warning);
     const unchanged = next?.fingerprint === this.registration?.fingerprint;
     this.registration = next;
+    this.watchWorktreeHead(next?.branchHead);
 
     if (next === undefined) {
       await this.stopHost();
@@ -166,13 +183,24 @@ class WorkspaceHaloController implements vscode.Disposable {
       workspaceFolders.map((folder) => folder.name),
       rootSynonyms
     );
-    const root = workspaceFolders.find((folder) => folder.name === rootName);
+    // Without a named root, a linked worktree still qualifies whatever its
+    // folder is named: the root is the folder holding the workspace file.
+    const workspaceDirectory = path.dirname(workspaceFile.fsPath);
+    const root = rootName === undefined
+      ? workspaceFolders.find((folder) =>
+        folder.uri.scheme === "file"
+        && path.relative(path.join(folder.uri.fsPath, ".vscode"), workspaceDirectory) === "")
+      : workspaceFolders.find((folder) => folder.name === rootName);
     if (root === undefined || root.uri.scheme !== "file") {
       return undefined;
     }
 
     const vscodeDirectory = vscode.Uri.joinPath(root.uri, ".vscode");
-    if (path.relative(vscodeDirectory.fsPath, path.dirname(workspaceFile.fsPath)) !== "") {
+    if (path.relative(vscodeDirectory.fsPath, workspaceDirectory) !== "") {
+      return undefined;
+    }
+    const checkout = await this.gitCheckout(root.uri.fsPath, workspaceFileName);
+    if (rootName === undefined && !checkout.linkedWorktree) {
       return undefined;
     }
     let directoryEntries: readonly [string, vscode.FileType][];
@@ -194,6 +222,8 @@ class WorkspaceHaloController implements vscode.Disposable {
       : vscode.Uri.joinPath(vscodeDirectory, selection.exactLogo);
     const logoStat = logo === undefined ? undefined : await vscode.workspace.fs.stat(logo);
     const settings = this.resolveSettings(root);
+    const branchHead = checkout.linkedWorktree || settings.showBranch ? checkout.head : undefined;
+    const branch = branchHead === undefined ? undefined : await readBranch(branchHead);
     let warning: string | undefined;
     if (selection.exactLogo !== undefined && selection.logoFiles.length > 1) {
       warning = `Workspace Halo found multiple logo files in ${vscodeDirectory.fsPath}: ${selection.logoFiles.join(", ")}. Keep only ${selection.exactLogo}.`;
@@ -206,11 +236,53 @@ class WorkspaceHaloController implements vscode.Disposable {
       logo: logo?.toString(),
       logoMtime: logoStat?.mtime,
       logoSize: logoStat?.size,
+      branch,
       settings,
       warning
     });
 
-    return { workspaceName, root, logo, settings, warning, fingerprint };
+    return { workspaceName, root, logo, branch, branchHead, settings, warning, fingerprint };
+  }
+
+  // gitCheckout memorizes, in the workspace state, where the root's HEAD
+  // lives and whether the root is a linked worktree of the same workspace, so
+  // refreshes only re-read HEAD instead of redoing the detection. A memo
+  // whose HEAD file is gone is detected again.
+  private async gitCheckout(rootPath: string, workspaceFileName: string): Promise<GitCheckout> {
+    const remembered = this.context.workspaceState.get<GitCheckout>("gitCheckout");
+    if (
+      remembered?.root === rootPath
+      && remembered.workspaceFileName === workspaceFileName
+      && (remembered.head === undefined || await readBranch(remembered.head) !== undefined)
+    ) {
+      return remembered;
+    }
+    const detected = await detectGitCheckout(rootPath, workspaceFileName);
+    await this.context.workspaceState.update("gitCheckout", detected);
+    return detected;
+  }
+
+  // watchWorktreeHead follows the HEAD file of the tracked worktree, outside
+  // the workspace, so a branch switch redraws the halo's second line.
+  private watchWorktreeHead(head: string | undefined): void {
+    if (head === this.headWatchPath) {
+      return;
+    }
+    this.headWatcher?.dispose();
+    this.headWatcher = undefined;
+    this.headWatchPath = head;
+    if (head === undefined) {
+      return;
+    }
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(vscode.Uri.file(path.dirname(head)), path.basename(head))
+    );
+    this.headWatcher = vscode.Disposable.from(
+      watcher,
+      watcher.onDidCreate(() => this.scheduleRefresh()),
+      watcher.onDidChange(() => this.scheduleRefresh()),
+      watcher.onDidDelete(() => this.scheduleRefresh())
+    );
   }
 
   private resolveSettings(root: vscode.WorkspaceFolder): HaloSettings {
@@ -233,7 +305,8 @@ class WorkspaceHaloController implements vscode.Disposable {
       pillOpacity: workspaceScopedValue(halo.inspect<number>("pillOpacity"), 100),
       pillMargin: workspaceScopedValue(halo.inspect<number>("pillMargin"), 50),
       borderSegment: workspaceScopedValue(halo.inspect<number>("borderSegment"), 50),
-      logoScale: workspaceScopedValue(halo.inspect<number>("logoScale"), 33)
+      logoScale: workspaceScopedValue(halo.inspect<number>("logoScale"), 33),
+      showBranch: workspaceScopedValue(halo.inspect<boolean>("showBranch"), false)
     };
   }
 
@@ -294,12 +367,15 @@ class WorkspaceHaloController implements vscode.Disposable {
     if (registration.logo !== undefined) {
       args.push("--logo", registration.logo.fsPath);
     }
+    if (registration.branch !== undefined) {
+      args.push("--branch", registration.branch);
+    }
     if (registration.warning !== undefined) {
       args.push("--startup-warning", registration.warning);
     }
 
     this.output.info(
-      `Tracking ${registration.workspaceName}: root=${registration.root.uri.fsPath}, logo=${registration.logo?.fsPath ?? "none"}.`
+      `Tracking ${registration.workspaceName}: root=${registration.root.uri.fsPath}, logo=${registration.logo?.fsPath ?? "none"}, branch=${registration.branch ?? "none"}.`
     );
     this.output.info(`Native host log: ${logPath}`);
     const child = spawn(hostPath, args, {
@@ -457,6 +533,46 @@ class WorkspaceHaloController implements vscode.Disposable {
       });
     }
     this.stopping = false;
+  }
+}
+
+// detectGitCheckout locates the HEAD file of the root's Git checkout, and
+// flags a linked worktree whose main working tree holds the same .vscode
+// workspace file (exact case). A root outside Git has no HEAD.
+async function detectGitCheckout(
+  rootPath: string,
+  workspaceFileName: string
+): Promise<GitCheckout> {
+  const outside: GitCheckout = { root: rootPath, workspaceFileName, linkedWorktree: false };
+  const dotGit = path.join(rootPath, ".git");
+  try {
+    if ((await stat(dotGit)).isDirectory()) {
+      return { ...outside, head: path.join(dotGit, "HEAD") };
+    }
+    const pointer = gitdirPointer(await readFile(dotGit, "utf8"));
+    if (pointer === undefined) {
+      return outside;
+    }
+    const gitdir = path.resolve(rootPath, pointer);
+    const head = path.join(gitdir, "HEAD");
+    const commondir = path.resolve(
+      gitdir,
+      (await readFile(path.join(gitdir, "commondir"), "utf8")).trim()
+    );
+    const linkedWorktree = path.basename(commondir) === ".git"
+      && (await readdir(path.join(path.dirname(commondir), ".vscode")).catch((): string[] => []))
+        .includes(workspaceFileName);
+    return { ...outside, head, linkedWorktree };
+  } catch {
+    return outside;
+  }
+}
+
+async function readBranch(head: string): Promise<string | undefined> {
+  try {
+    return branchFromHead(await readFile(head, "utf8"));
+  } catch {
+    return undefined;
   }
 }
 
