@@ -92,17 +92,26 @@ The state machine cycles through these transitions:
   never starts another interception, whatever its delivery order or delay.
 - A separate minimize by the user or by Windows stays eligible for normal
   interception, even shortly after a replay, when three conditions hold: it can
-  be told apart from the host's own events, it is notified promptly enough
-  (Q02), and the window is below the cap (Q03).
+  be told apart from the host's own events, it is notified within the lateness
+  bound, and the window is below the interception cap.
 - When a notification's origin is ambiguous, the host does not restore the
   window just to compose a halo. It leaves the actual window state as it is
   and logs the skipped interception.
-- The design must justify any method used to attribute an event's origin
-  (Q06). Matching an event's generation time to the interval of a host call is
-  timing evidence, not proof of origin on its own.
+- The design must choose and validate the method used to attribute an event's
+  origin. Matching an event's generation time (`dwmsEventTime`) to the
+  interval of a host call is a candidate method. It is timing evidence, not
+  proof of origin on its own.
+- A minimize notified later than a fixed bound after Windows generated it is
+  not intercepted. The window stays minimized without a halo on its thumbnail,
+  and the reason is logged. The age is measured from the event generation
+  time once the design has validated its clock, precision and wrap behavior.
+  When the age can't be established (a missing, future or wrapped timestamp),
+  the host doesn't intercept and logs it.
 - One minimize action leads to at most one interception, and the window ends
-  up minimized. The one exception is a real user restore, handled as Q04
-  decides.
+  up minimized. While a replay is pending, the window is visible only because
+  the host showed it, so the replay always completes the user's minimize,
+  even if the user clicks into the window in that interval. A real restore
+  after the replay is honored.
 - The host's minimize state always returns to a state consistent with the
   actual window, even when an event is missing or reordered. It never stays
   stuck in an intermediate state.
@@ -110,38 +119,54 @@ The state machine cycles through these transitions:
   thumbnail with its halo when its origin is distinguishable and the
   per-window cap has not applied.
 - A per-window cap on interceptions is kept as a last-resort backstop, not as
-  the mechanism that ends the loop. Q03 settles its form.
+  the mechanism that ends the loop. A window gets at most N interceptions
+  within a sliding time window. A further minimize in that window goes through
+  without interception, and the host logs that the cap applied. Counting
+  restarts once the window has had no interception for a quiet period. The
+  cap is fixed, not a user setting, and is reported in `native-host.log` only.
 
 ## Required behaviors to close the gap for `minimize_loop`
 
 1. Handling its own events: a notification the host identifies as caused by
    its own restore or replay is never intercepted, whatever its delay or
    order. A notification of ambiguous origin is not intercepted either: the
-   window state stays as it is, and the skip is logged (Q06).
+   window state stays as it is, and the skip is logged.
 2. Keeping user minimizes eligible: a separate user or system minimize, even
    soon after a replay, gets the normal interception when it can be told apart
-   from the host's events and passes the Q02 and Q03 rules.
-3. Respecting a real user restore: the outcome follows Q04, and the host's
-   state is reconciled with the actual window so it never stays stuck.
-4. Handling late notifications: a minimize notified too late for a
-   non-disruptive halo capture is not intercepted. The window stays minimized
-   and the reason is logged (Q02). The lateness criterion must rest on a
-   trustworthy event-time basis, with a defined fallback when that basis is
-   unavailable or ambiguous.
-5. Capping as a backstop: interceptions per window are bounded, and the host
-   logs when the bound applies (Q03).
-6. Acceptance evidence: unit tests on the recorded and counterexample
-   sequences, plus one manual unplug judged per minimize action (Q05).
+   from the host's events, is within the lateness bound, and the window is
+   below the cap.
+3. Completing the pending replay and honoring later restores: the replay
+   completes the minimize the user asked for, a restore after the replay keeps
+   the window restored, and the host's state is reconciled with the actual
+   window so it never stays stuck.
+4. Handling late notifications: a minimize notified past the lateness bound,
+   or whose age can't be established, is not intercepted. The window stays
+   minimized and the reason is logged.
+5. Capping as a backstop: interceptions per window follow the sliding-window
+   cap with its quiet-period reset, and the host logs when the cap applies.
+6. Acceptance evidence: unit tests cover the in-order and reordered recorded
+   sequences, a replay notification delayed beyond any timing bound, a prompt
+   separate user minimize after a replay, user actions before and after the
+   replay, recovery from a missing event, late and unknown-age notifications,
+   a notification of ambiguous origin, and cap trip and reset. One manual
+   unplug from three monitors to one, with four VS Code windows open, is
+   judged per minimize action: the host log shows no repeated interception
+   cycle, and no window makes an unsolicited delayed or repeated return to the
+   foreground after the unplug. The relevant log lines are kept as evidence.
 
-The exact thresholds (the lateness bound, the cap count, its time window and
-the suspension duration) are examples here. The design fixes them.
+The design fixes the exact thresholds and documents them with the other
+timing constants in `wiki/reference/display-triggers.md`: the lateness bound
+(500 ms is an example), the cap count and its time window (2 interceptions
+within 2 s is an example), and the quiet period that resets it.
 
 ## Related work outside minimize_loop
 
 After the unplug, no host logged `display topology=internal`. In child mode,
 the overlay may never receive `WM_DISPLAYCHANGE`, which would disable topology
-tracking after startup. This is not confirmed and does not block this issue.
-Q01 moves it to a separate follow-up issue.
+tracking, including the Duplicate-mode suppression of the `occluded` trigger,
+after startup. This is unconfirmed and does not block this issue. It is
+tracked as a separate follow-up issue, which must confirm the observation
+first.
 
 ## Concrete examples for `minimize_loop`
 
@@ -162,16 +187,18 @@ Q01 moves it to a separate follow-up issue.
 - A `MinimizeStart` arrives that the host cannot confidently attribute, to
   itself or to a separate action -> it is not intercepted. The window stays
   in its actual state, and the ambiguous origin is logged.
+- The user clicks into the window while the replay is pending -> the replay
+  still minimizes it, as the user asked.
 - The user restores the window after the replayed minimize -> the window
   stays restored, and the host returns to its idle state.
 - A minimize is notified seconds after Windows performed it, as after the
   unplug -> it is not intercepted. The window stays minimized without a
   halo on its thumbnail, and the reason is logged.
-- A minimize's notification time can't be established -> the fallback
-  decided in Q02 applies, and it is logged.
+- A minimize's notification age can't be established -> it is not
+  intercepted, and the reason is logged.
 - An unexpected sequence still repeats interceptions for one window -> the
-  cap stops them, the window minimizes without the halo, and the host logs
-  it.
+  cap lets the next minimize through without the halo, the host logs it, and
+  normal interception resumes after the quiet period.
 
 ## Code references for `minimize_loop`
 
@@ -202,346 +229,13 @@ Q01 moves it to a separate follow-up issue.
   `wiki/reference/display-triggers.md`: documentation of the minimize
   interception and its timing constants.
 
-## Open questions for the v0.0.24 minimize_loop issue
+## Requirement clarifications for minimize_loop
 
-### Q01: Scope of the child-mode display-change observation
-
-Question description: the "Related work outside minimize_loop" section notes
-that child-mode overlays (`WS_CHILD`) may never receive `WM_DISPLAYCHANGE`, so
-topology tracking and the Duplicate-mode suppression of the `occluded` trigger
-would stop after startup. This is unconfirmed, and nothing in this issue's
-required behaviors depends on it any more. Should this issue also fix the
-display-change reception, move it to a separate follow-up issue, or keep it as
-a note only?
-
-#### BBQ for Q01
-
-A smoke detector goes off every time someone grills, and while checking it you
-find the doorbell wire may also be cut. You can fix both in one visit, open a
-second work order for the doorbell, or just note it on the invoice. In this
-picture: the smoke detector going off is the minimize interception loop, the
-possibly cut doorbell wire is the missing `WM_DISPLAYCHANGE` in child mode, the
-second work order is a separate follow-up issue, and the invoice note is the
-"Related work outside minimize_loop" section.
-
-#### Options for Q01
-
-- Option A: fix the display-change reception in this issue as well.
-  - pro: one effort covers both problems seen during the same unplug.
-  - con: mixes two separate problems. Duplicate-mode suppression has nothing to
-    do with minimize.
-  - con: the observation is unconfirmed, so this issue's completion would
-    depend on an investigation.
-- Option B: track it in a separate follow-up issue, and keep only a short
-  related-work pointer here.
-  - pro: this issue stays about ending the minimize loop, and its acceptance is
-    clear.
-  - pro: the follow-up can confirm the observation first.
-  - con: two efforts to run, review and merge.
-- Option C: keep the pointer as a note only, with no follow-up.
-  - pro: no extra work now.
-  - con: a likely regression of the Duplicate-mode protection stays unfixed and
-    untracked.
-
-#### Recommended option for Q01 (with arguments for this choice)
-
-Option B: the loop is fully explained by late and reordered events, and none
-of this issue's required behaviors needs display-change notices. The child-mode
-problem affects another trigger and must be confirmed first. A separate issue
-keeps each fix verifiable and still tracks the possible regression.
-
-#### Answer to Q01: option B (with reason why it must be accepted as the answer)
-
-Option B: it keeps this issue focused and its completion independent of an
-unconfirmed investigation, without losing track of the possible regression.
-
-### Q02: Minimizes notified late, and how lateness is known
-
-Question description: after the unplug, each host intercepted its window 3 to
-6 seconds after logging it as minimized. That delay is inferred from the log
-chronology, because the host does not record when Windows generated each
-event. Restoring a window that long after its minimize makes it visibly pop
-back. Each WinEvent notification does carry the time Windows generated it
-(`dwmsEventTime`), which the host discards today. That gives timing input to
-estimate a notification's age when it arrives. The design must validate its
-time base, precision and wrap behavior before relying on any bound. What
-should happen to a minimize notified late, and what applies when its age
-cannot be established?
-
-#### BBQ for Q02
-
-A photographer notices a missing name tag on a class photo. Noticed right
-away, a two-second retake is fine. Noticed an hour later, calling the student
-back disrupts everyone. The time printed on the photo, not the time the
-photographer looks at it, tells how old the shot is. In this picture: the
-class photo is the minimized window's thumbnail, the name tag is the halo, the
-retake is the restore, compose and replay cycle, the time printed on the photo
-is the event generation time (`dwmsEventTime`), and the moment the photographer
-looks is when the notification reaches the host.
-
-#### Options for Q02
-
-- Option A: always intercept, however late the notification is.
-  - pro: every minimized thumbnail gets its halo.
-  - con: seconds after an unplug, each affected window visibly reappears and
-    minimizes again.
-- Option B: intercept only when the notification's age, measured from the time
-  Windows generated the event, is under a bound (the design fixes the value,
-  500 ms is an example). Past the bound, the window stays minimized without a
-  halo and the reason is logged. When the age cannot be established (for
-  example a missing, future or wrapped timestamp), do not intercept and log
-  it.
-  - pro: no window reappears seconds later, which removes the visible pop.
-  - pro: the criterion rests on a time Windows records, not on log order,
-    once the design has validated its clock and wrap behavior.
-  - pro: the fallback fails safe: at worst a bare thumbnail, never a pop.
-  - con: thumbnails of windows minimized by an unplug have no halo until their
-    next minimize.
-- Option C: skip interception for a fixed period after any display
-  configuration change.
-  - pro: also avoids the visible pop.
-  - con: depends on display-change notices, which Q01 moves out of scope.
-  - con: also skips prompt, legitimate minimizes during that period.
-
-#### Recommended option for Q02 (with arguments for this choice)
-
-Option B: lateness is what makes an interception disruptive. The event
-generation time can provide a basis for measuring age once the design
-validates its clock, precision and wrap behavior. Its fallback never restores
-a window on uncertain evidence. Normal minimizes, notified within
-milliseconds, keep their halo.
-
-#### Answer to Q02: option B (with reason why it must be accepted as the answer)
-
-Option B: it removes the after-unplug pop on a measurable basis, fails safe
-when the age is unknown, and doesn't depend on the display-change work moved
-out by Q01.
-
-### Q03: Form and semantics of the interception cap
-
-Question description: the cap is a last-resort backstop, not the mechanism
-that ends the loop. What does it count, when does it trip and reset, and is it
-fixed or configurable?
-
-#### BBQ for Q03
-
-A revolving door has a jam sensor. After a given number of jams within a few
-seconds, it stops turning and simply opens so people can walk through, then
-resumes once no jam has happened for a while. The threshold can be fixed at the
-factory or adjustable by the building manager. In this picture: the jam sensor
-is the per-window interception counter, opening the door is letting a minimize
-through without a halo, resuming is the counter's reset after a quiet period,
-the building manager is the user through a `workspaceHalo` setting, and the
-maintenance log is `native-host.log`.
-
-#### Options for Q03
-
-- Option A: fixed documented constants. A window gets at most N interceptions
-  within a sliding time window. A further minimize in that window goes through
-  without interception, and the host logs that the cap applied. Counting
-  restarts once the window has had no interception for a quiet period. The
-  design fixes N and both durations (2 interceptions within 2 s and a few
-  seconds of quiet are examples). The values are documented with the other
-  timing constants in `wiki/reference/display-triggers.md`.
-  - pro: no new setting to explain, and it behaves the same everywhere.
-  - pro: trip and reset are defined, so they can be tested.
-  - con: a user who quickly minimizes, restores and minimizes again can lose
-    the halo on a later minimize.
-- Option B: the same semantics, with N and the durations as user settings.
-  - pro: an unusual workflow can tune it.
-  - con: an extension setting has to reach the host, which is more surface for
-    a safety net most users never hit.
-- Option C: option A plus a warning in the extension's output channel when the
-  cap trips.
-  - pro: the trip is visible without opening the host log.
-  - con: adds a channel from the host to the extension for a rare event.
-
-#### Recommended option for Q03 (with arguments for this choice)
-
-Option A: a backstop should be predictable and testable, not tuned. Defined
-trip and reset semantics make it testable, and the host log already records
-every visibility and minimize decision.
-
-#### Answer to Q03: option A (with reason why it must be accepted as the answer)
-
-Option A: it adds a bounded, testable protection with the least surface. The
-rare lost halo during rapid repeated minimizes is acceptable for a guard whose
-job is to make an endless loop impossible.
-
-### Q04: User actions while a replay is pending
-
-Question description: an interception restores the window so the halo can be
-composed, then replays the minimize shortly after. A user restore before the
-replay cannot happen as a restore: the host has already shown the window. The
-user can still act on the window in that interval, for example by clicking into
-it. After the replay, the user can restore the window normally. Which actions
-cancel the pending replay, and what must the host's state reflect afterwards?
-
-#### BBQ for Q04
-
-A valet takes a car to the garage, but first drives it past the entrance for a
-quick photo, then parks it. If the owner taps the window during that photo
-pass, the valet can finish parking as asked, or give the keys back. Once the car
-is parked, the owner can always ask for it again. In this picture: taking the
-car to the garage is the user's minimize, the photo pass is the interval between
-the host's priming restore and its replay, tapping the window is the user
-clicking into the window, giving the keys back is cancelling the replay, and
-asking for the parked car is a real restore after the replay.
-
-#### Options for Q04
-
-- Option A: the pending replay always completes the user's minimize. A restore
-  after the replay is honored. In every case the host's state is reconciled
-  with the actual window, so it never stays stuck.
-  - pro: the host never takes its own activating restore (the `SW_RESTORE`
-    fallback) for a user choice.
-  - pro: the interval is short, because late notifications are not
-    intercepted (Q02).
-  - con: a user who clicks into the window during that interval sees it
-    minimize anyway.
-- Option B: user activation of the window during the interval, not caused by
-  the host, cancels the pending replay. The window stays shown and the
-  cancellation is logged. A restore after the replay is honored, and the state
-  is reconciled in every case.
-  - pro: a deliberate user click during the interval is respected.
-  - con: it needs to tell user activation apart from the host's own activating
-    fallback. A mistake would leave a window shown that the user asked to
-    minimize.
-- Option C: leave actions during the interval undefined.
-  - pro: no extra requirement.
-  - con: allows a stuck state, the kind of silent fault this issue is about.
-
-#### Recommended option for Q04 (with arguments for this choice)
-
-Option A: the user's last explicit request in that interval is the minimize,
-and the window is visible only because the host showed it. Completing the
-replay honors that request, and it can't be confused by the host's own
-activation. Reconciling with the actual window state keeps any later restore
-effective and prevents a stuck state.
-
-#### Answer to Q04: option A (with reason why it must be accepted as the answer)
-
-Option A: it keeps the user's minimize request, honors every real restore after
-it, and guarantees recovery. It avoids the attribution risk of option B for an
-interval that Q02 keeps short.
-
-### Q05: Acceptance evidence for the minimize loop fix
-
-Question description: the loop only shows up during a real display
-reconfiguration, which unit tests cannot produce. What evidence should close
-this issue, and per what unit is the manual result judged?
-
-#### BBQ for Q05
-
-A mechanic fixes a rattle that only appears on cobblestones. A bench test with
-recorded vibrations proves the part holds, and a drive over real cobblestones
-proves the car is quiet. In this picture: the bench test is the unit tests over
-the recorded and counterexample event sequences, the recorded vibrations are
-the event orders from the 2026-09-24 logs, the cobblestone drive is a real
-three-to-one monitor unplug, and a quiet car is at most one interception per
-minimize action, with no window coming forward on its own.
-
-#### Options for Q05
-
-- Option A: unit tests only.
-  - pro: fast, repeatable, and part of the normal test run.
-  - con: doesn't show that the real Windows timing is covered.
-- Option B: unit tests covering the in-order and reordered recorded sequences,
-  a replay notification delayed beyond any timing bound, a prompt separate user
-  minimize after a replay, user actions before and after the replay (Q04),
-  recovery from a missing event, late and unknown-age notifications (Q02), a
-  notification of ambiguous origin (Q06), and cap trip and reset (Q03). Plus
-  one manual unplug from three monitors to one with four VS Code windows
-  open. For each minimize action, the host log shows no repeated interception
-  cycle, and no window makes an unsolicited delayed or repeated return to the
-  foreground after the unplug. The relevant log lines are kept as evidence.
-  - pro: covers the logic, the counterexamples and the real trigger.
-  - pro: the per-action criterion doesn't penalize legitimate repeated user
-    minimizes in the same session.
-  - con: needs one manual session with the docking hardware.
-- Option C: option B plus a diagnostic host flag that delays event handling on
-  purpose.
-  - pro: late delivery can be reproduced without unplugging.
-  - con: adds a test-only feature to the shipped host.
-
-#### Recommended option for Q05 (with arguments for this choice)
-
-Option B: the unit tests lock down every ordering and counterexample the
-required behaviors name, and one real unplug confirms nothing else loops or
-pops. The per-action log criterion makes the manual check objective.
-
-#### Answer to Q05: option B (with reason why it must be accepted as the answer)
-
-Option B: the bug came from a real unplug, so closing it needs that scenario,
-judged per minimize action. Option C's diagnostic flag isn't needed once the
-tests cover the recorded and counterexample sequences.
-
-### Q06: How the host treats its own events and events of ambiguous origin
-
-Question description: the host's own restore and replay must never start
-another interception, whatever the delay or order of their notifications. A
-separate user minimize should stay eligible. A clock check on arrival time (for
-example "within 1 s of the replay") can't deliver that: a replay notified later
-loops again, and a real user minimize inside the interval is swallowed.
-Matching an event's generation time (`dwmsEventTime`) to the interval of a
-host call is a candidate method. It is timing evidence, not proof of origin: an
-unrelated event can be generated in the same interval, timestamps can share a
-millisecond, and a host-caused event could be generated outside the measured
-interval. Which behavior does this issue require, and what happens when origin
-is uncertain?
-
-#### BBQ for Q06
-
-A mailroom receives letters days late and out of order. It wants to spot its
-own returned mail. The postmark date matching a day it posted letters is a
-strong hint, but someone else may have posted on that day too. For an envelope
-it can't place with confidence, the mailroom can guess, or set it aside and
-leave the desk as it is. In this picture: the letters are minimize
-notifications, the mailroom's own mail is the events caused by the host's
-restore and replay, the postmark is the event generation time
-(`dwmsEventTime`), the posting days are the intervals of the host's calls,
-guessing is intercepting an event of uncertain origin, and setting the envelope
-aside is skipping the interception and logging it.
-
-#### Options for Q06
-
-- Option A: safety outcome with an explicit uncertainty exception. A
-  notification the host identifies as its own never triggers an interception.
-  A separate minimize the host can tell apart stays eligible. A notification of
-  ambiguous origin is not intercepted: the window state stays as it is, and the
-  skip is logged. The attribution method is left to the design, which must
-  validate it. Matching the event generation time to the host's call interval
-  is one candidate, and only counts as evidence once validated.
-  - pro: the loop can't repeat, even for arbitrarily late events the host can
-    identify, and uncertainty never causes a visible restore.
-  - pro: states honestly that some separate minimizes may lose their halo when
-    their origin is ambiguous.
-  - con: how many minimizes turn out ambiguous depends on the attribution
-    method the design validates.
-- Option B: bounded guarantee. The host treats a notification arriving within
-  a fixed interval after its replay as its own, and relies on the cap for
-  anything later.
-  - pro: simple, and needs no attribution method.
-  - con: late replays can still restore the window once more, and a real
-    minimize inside the interval is swallowed.
-- Option C: no event attribution. While the host has a restore or replay in
-  flight, it ignores every notification, then decides only from the actual
-  window state.
-  - pro: independent of event timing.
-  - con: a notification delivered after the in-flight period ends is still
-    unattributed, so the arbitrarily late case is not covered.
-
-#### Recommended option for Q06 (with arguments for this choice)
-
-Option A: it keeps the goal (the host's own events never re-trigger) and
-fails safe on uncertainty (no restore, logged), without claiming a proof the
-issue can't give. The design picks and validates the attribution method,
-starting with the event-time interval candidate. Option B gives up the
-guarantee for late replays, and option C doesn't cover the late case that
-caused the loop.
-
-#### Answer to Q06: option A (with reason why it must be accepted as the answer)
-
-Option A: it's the only option that removes the loop for every event the host
-can identify while never restoring a window on uncertain evidence. It also
-leaves the attribution proof to the design, where it belongs.
+| Question | Decision | Integrated in | Rejected alternatives |
+| --- | --- | --- | --- |
+| Q01 | Track the unconfirmed child-mode `WM_DISPLAYCHANGE` observation as a separate follow-up issue. Keep only a short pointer here, so this issue's completion doesn't depend on that investigation | Related work outside minimize_loop | Fix it in this issue (mixes an unconfirmed topology problem into the loop fix); note only (a likely regression stays untracked) |
+| Q02 | Don't intercept a minimize notified past a fixed bound after Windows generated it. The window stays minimized, and the reason is logged. The age comes from the event generation time once the design validates it. When the age can't be established, don't intercept and log it | Confirmed rule; required behavior 4; examples | Always intercept (keeps the visible after-unplug pop); skip after display changes (depends on Q01 and skips prompt minimizes) |
+| Q03 | Fixed per-window cap as a backstop: at most N interceptions in a sliding window, the next minimize goes through and is logged, counting restarts after a quiet period. Values fixed by the design and documented, reported in `native-host.log` only | Confirmed rule; required behavior 5; examples | User setting (extension-to-host surface for a rare safety net); output-channel warning (new host-to-extension path for a rare event) |
+| Q04 | The pending replay always completes the user's minimize, because the window is visible only because the host showed it. A restore after the replay is honored, and the state is always reconciled with the actual window | Confirmed rule; required behavior 3; examples | User activation cancels the replay (can't safely tell it apart from the host's own activating `SW_RESTORE` fallback); leave it undefined (allows a stuck state) |
+| Q05 | Unit tests on the recorded and counterexample sequences, including ambiguous origin, plus one manual 3-to-1 unplug. The unplug is judged per minimize action: no repeated interception cycle, and no unsolicited delayed or repeated return to the foreground | Required behavior 6 | Unit tests only (misses the real trigger); a diagnostic delay flag in the host (test-only feature in the shipped product) |
+| Q06 | Identified host events never trigger an interception, distinguishable separate minimizes stay eligible, and ambiguous-origin events are skipped and logged. The design chooses and validates the attribution method. An event-time interval match is a candidate, not proof of origin | Confirmed rule; required behaviors 1 and 2; examples; code references | Arrival-time window plus cap (late replays still restore once, real minimizes can be swallowed); in-flight suppression only (doesn't cover arbitrarily late events) |
