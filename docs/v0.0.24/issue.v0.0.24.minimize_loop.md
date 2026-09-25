@@ -101,12 +101,13 @@ The state machine cycles through these transitions:
   origin. Matching an event's generation time (`dwmsEventTime`) to the
   interval of a host call is a candidate method. It is timing evidence, not
   proof of origin on its own.
-- A minimize notified later than a fixed bound after Windows generated it is
-  not intercepted. The window stays minimized without a halo on its thumbnail,
-  and the reason is logged. The age is measured from the event generation
-  time once the design has validated its clock, precision and wrap behavior.
-  When the age can't be established (a missing, future or wrapped timestamp),
-  the host doesn't intercept and logs it.
+- A minimize whose minimized-state transition happened more than a fixed
+  bound before the host observes it is not intercepted. The window stays
+  minimized without a halo on its thumbnail, and the reason is logged. The
+  age is bounded with the host's own clock, from its last observation of the
+  window shown. When that bound can't prove the age is within the lateness
+  bound, the age is unknown, and the host doesn't intercept and logs it. This
+  rule is amended by the v0.0.24 design (see the amendment section below).
 - One minimize action leads to at most one interception, and the window ends
   up minimized. While a replay is pending, the window is visible only because
   the host showed it, so the replay always completes the user's minimize,
@@ -139,9 +140,9 @@ The state machine cycles through these transitions:
    completes the minimize the user asked for, a restore after the replay keeps
    the window restored, and the host's state is reconciled with the actual
    window so it never stays stuck.
-4. Handling late notifications: a minimize notified past the lateness bound,
-   or whose age can't be established, is not intercepted. The window stays
-   minimized and the reason is logged.
+4. Handling late minimizes: a minimize whose transition age is past the
+   lateness bound, or can't be bounded within it, is not intercepted. The
+   window stays minimized and the reason is logged.
 5. Capping as a backstop: interceptions per window follow the sliding-window
    cap with its quiet-period reset, and the host logs when the cap applies.
 6. Acceptance evidence: unit tests cover the in-order and reordered recorded
@@ -191,11 +192,13 @@ first.
   still minimizes it, as the user asked.
 - The user restores the window after the replayed minimize -> the window
   stays restored, and the host returns to its idle state.
-- A minimize is notified seconds after Windows performed it, as after the
-  unplug -> it is not intercepted. The window stays minimized without a
-  halo on its thumbnail, and the reason is logged.
-- A minimize's notification age can't be established -> it is not
-  intercepted, and the reason is logged.
+- After the unplug, Windows minimizes the windows and the host observes each
+  minimize promptly, while the notifications arrive seconds later -> at most
+  one interception per window, right away. The late notifications have no
+  effect, so no window comes back to the front later.
+- The host can only bound a minimize's transition age to more than the
+  lateness bound, for example after its thread stalled -> it is not
+  intercepted, and the reason (`unknown-age`) is logged.
 - An unexpected sequence still repeats interceptions for one window -> the
   cap lets the next minimize through without the halo, the host logs it, and
   normal interception resumes after the quiet period.
@@ -228,6 +231,23 @@ first.
 - `wiki/explanation/how-the-overlay-stays-inside-its-window.md` and
   `wiki/reference/display-triggers.md`: documentation of the minimize
   interception and its timing constants.
+
+## Amendment from the v0.0.24 design for minimize_loop
+
+The design review (design Q02, approved at its review gate) amended the
+lateness rule settled in Q02 below. The rule now applies to the age of the
+observed minimized-state transition, not to the age of the minimize
+notification. The host bounds that age with its own clock, as the time since
+it last observed the window shown. A bound within 500 ms proves the minimize
+prompt, and any larger bound is treated as an unknown age and skipped.
+
+The reason: nothing establishes that a notification can't be generated before
+the window's state changes, so the host can't bound notification age from its
+observations. The transition age is also what the user sees, since a late
+restore is disruptive because the window visibly minimized long ago.
+Decisions no longer depend on notifications, whose delivery caused the loop.
+The confirmed rule, required behavior 4 and the examples above are updated
+accordingly. The Q02 row below records the original decision.
 
 ## Requirement clarifications for minimize_loop
 
