@@ -405,7 +405,12 @@ Step framing:
   and the five moved functions with their doc comments.
 - `companion/main_windows.go`: the `var` block at line 360 keeps only
   `activeApp`; imports stay as they are unless the compiler reports one
-  unused.
+  unused. `renderOverlay` also declares the `CreateDIBSection` pixel address
+  `bits` as `unsafe.Pointer` instead of `uintptr`, so the `go vet` "possible
+  misuse of unsafe.Pointer" finding already present on HEAD goes away with no
+  behavior change and every step's vet check starts clean. That change rides
+  in the Step 1 move commit, named in its own bullet, because a commit group
+  stages whole files and a `main_windows.go`-only commit would not build.
 - `companion/main_windows_test.go`: lines 274-329 removed; imports checked for
   any that became unused.
 
@@ -420,8 +425,14 @@ Step framing:
   git grep -nE 'func (minimizeEventTransition|minimizeTransition)' -- $main
   git grep -nE 'func .*(MinimizeHook|WinEventProc|Priming)' -- $main
   git grep -nE 'func .*(composeHalo|PendingMinimize)' -- $main
-  git grep -n 'minimize' -- companion/main_windows_test.go
+  $pat = 'minimize(Transition|EventTransition|Idle|Priming|Replaying|Committed)'
+  git grep -nE "$pat|eventSystemMinimize" -- companion/main_windows_test.go
   ```
+
+  The last check names the minimize-interception symbols rather than the
+  bare word `minimize`, which also matches the `minimized` visibility trigger
+  of `TestVisibilityStatePrecedence`, a `visibilityState` test that stays in
+  `main_windows_test.go`.
 
 - `gofmt -l` prints nothing, `go vet` is clean, and the `--- PASS` count is
   unchanged.
@@ -691,7 +702,7 @@ Step framing:
 
 Line-budget checkpoint:
 
-- `companion/main_windows.go`: before about 1844 (after Step 1); over-650
+- `companion/main_windows.go`: before about 1846 (after Step 1); over-650
   split-required; target <= its post-Step-1 count (mandatory because the file
   is over the limit and must not grow in place); expected net -1 (advisory).
 - `companion/minimize_windows.go`: before about 70; below-550 safe; ceiling
