@@ -158,6 +158,7 @@ var (
 	procCloseHandle                = kernel32.NewProc("CloseHandle")
 	procQueryFullProcessImageNameW = kernel32.NewProc("QueryFullProcessImageNameW")
 	procSetLastError               = kernel32.NewProc("SetLastError")
+	procGetTickCount64             = kernel32.NewProc("GetTickCount64")
 
 	procDwmGetWindowAttribute = dwmapi.NewProc("DwmGetWindowAttribute")
 	procDwmFlush              = dwmapi.NewProc("DwmFlush")
@@ -288,8 +289,7 @@ type application struct {
 	overlay           uintptr
 	targetRect        rect
 	minimizeHook      uintptr
-	minimizeState     minimizePhase
-	minimizeReplayAt  uint64
+	minimize          *minimizeController
 	renderedRect      rect
 	visible           bool
 	visibilityReason  string
@@ -363,6 +363,7 @@ func main() {
 	} else {
 		app.visibilityReason = "activation"
 	}
+	app.minimize = newMinimizeController(app, logger, getTickCount64)
 	if err := app.installMinimizeHook(); err != nil {
 		fatalf("watch minimize events: %v", err)
 	}
@@ -793,7 +794,7 @@ func (a *application) tick() error {
 		return nil
 	}
 	now := getTickCount64()
-	a.replayPendingMinimize(now)
+	a.minimize.observe(now)
 	if a.topologyDirty && now >= a.topologyRetryAt {
 		if err := a.refreshDisplayTopology(); err != nil {
 			// Suppress ambient occlusion while topology is unsettled. A later
@@ -840,7 +841,7 @@ func (a *application) tick() error {
 	desired, reason := visibilityState(
 		a.manualVisible,
 		a.activationVisible,
-		minimized != 0 || a.minimizeState != minimizeIdle,
+		minimized != 0 || a.minimize.model.showsMinimizedTrigger(),
 		focused,
 		a.altTabVisible,
 		a.taskbarHover,
@@ -1790,8 +1791,7 @@ func lastInputTime() uint32 {
 }
 
 func getTickCount64() uint64 {
-	proc := kernel32.NewProc("GetTickCount64")
-	result, _, _ := proc.Call()
+	result, _, _ := procGetTickCount64.Call()
 	return uint64(result)
 }
 
