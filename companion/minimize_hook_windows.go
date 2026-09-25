@@ -16,6 +16,9 @@ package main
 // ShowWindow blocked. A WinEvent only logs its dwmsEventTime age and triggers
 // one observation; the re-prime and the legacy "minimize end" line are gone,
 // and every decision writes one native-host.log line.
+//
+// v0.0.24 step 3: the controller also logs the interception cap, one line when
+// an edge trips it and one when its quiet period resumes it.
 
 import (
 	"fmt"
@@ -53,7 +56,8 @@ func newMinimizeController(window minimizeWindow, logger *log.Logger, clock func
 	}
 }
 
-// observe runs one observation at now, logs its decision, intercepts a prompt
+// observe runs one observation at now, logs its decision and the cap changes
+// (a resume before the edge line, a trip after it), intercepts a prompt
 // external minimize, and runs the pending replay once it is due.
 func (c *minimizeController) observe(now uint64) {
 	settling := c.model
@@ -66,7 +70,17 @@ func (c *minimizeController) observe(now uint64) {
 			minimizeReadingName(settling.iconic),
 		)
 	}
+	if decision.capResumed {
+		c.logger.Printf("minimize interception resumed after %dms quiet", minimizeCapQuietMS)
+	}
 	c.logEdge(decision)
+	if decision.capTripped {
+		c.logger.Printf(
+			"minimize interception suspended: %d intercepts in %dms",
+			minimizeCapCount,
+			minimizeCapWindowMS,
+		)
+	}
 	if decision.action == minimizeIntercept {
 		c.intercept()
 	}

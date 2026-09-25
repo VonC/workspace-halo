@@ -8,6 +8,8 @@ package main
 // restore per interception, the single activating fallback, no composition
 // after an unsettled restore, own calls stamped after their after-reading,
 // late events that only log, and the session latch after an unsettled replay.
+// v0.0.24 step 3 adds the interception cap log lines: the trip on the third
+// edge within 2 s, and the resume after 5 s without any edge.
 
 import (
 	"bytes"
@@ -90,6 +92,13 @@ func newMinimizeControllerFixture() minimizeControllerFixture {
 func (f minimizeControllerFixture) externalMinimize(at uint64) {
 	*f.clock = at
 	f.window.iconic = true
+	f.controller.observe(at)
+}
+
+// externalRestore restores the window from outside and observes at at.
+func (f minimizeControllerFixture) externalRestore(at uint64) {
+	*f.clock = at
+	f.window.iconic = false
 	f.controller.observe(at)
 }
 
@@ -259,6 +268,34 @@ func TestMinimizeControllerDeferredReplayLatches(t *testing.T) {
 	)
 	if f.window.count(swShowNoActivate) != 1 || !f.controller.model.latched {
 		t.Fatalf("commands = %v, latched %t, want one restore and the latch", f.window.commands, f.controller.model.latched)
+	}
+}
+
+func TestMinimizeControllerLogsCapTripAndResume(t *testing.T) {
+	f := newMinimizeControllerFixture()
+	for _, at := range []uint64{1020, 1220} {
+		f.externalMinimize(at)
+		f.tickUntil(at + 80)
+		f.externalRestore(at + 180)
+	}
+
+	f.externalMinimize(1420)
+	f.requireLog(t,
+		"minimize edge: shown->iconic age<=20ms action=skip reason=cap",
+		"minimize interception suspended: 2 intercepts in 2000ms",
+	)
+	f.externalRestore(1500)
+	f.tickUntil(6419)
+	f.forbidLog(t, "resumed")
+	f.tickUntil(6450)
+	f.requireLog(t, "minimize interception resumed after 5000ms quiet")
+	f.externalMinimize(6450)
+
+	if f.window.count(swShowNoActivate) != 3 || f.controller.model.cap.suspended {
+		t.Fatalf("commands = %v, cap %+v, want the capped edge left alone", f.window.commands, f.controller.model.cap)
+	}
+	if strings.Count(f.output.String(), "interception suspended") != 1 {
+		t.Fatalf("log reports more than one trip:\n%s", f.output.String())
 	}
 }
 
