@@ -6,7 +6,8 @@ This document tracks the four steps of
 [plan.v0.0.24.minimize_loop.md](plan.v0.0.24.minimize_loop.md): the minimize
 code split, the observation model with own-call absorption and session latch,
 the interception cap, and the acceptance scenarios with documentation and the
-manual unplug. Step 1 is implemented; Steps 2 to 4 have not started.
+manual unplug. Steps 1 and 2 are implemented; Steps 3 and 4 have not
+started.
 
 > Initial-skeleton note: this first version was written by the `write-plans`
 > skill, before any implementation check. Every section that needs a check
@@ -235,9 +236,26 @@ No existing feature or reporting capability appears impaired.
 
 ### Analysis of Step 2 implementation state
 
-Not started. Step 2 is not implemented because the host still decides from
-event order through `minimizeEventTransition`, still re-primes in
-`replayPendingMinimize`, and has no `minimizeModel` or `minimizeController`.
+Yes. Step 2 has been fully implemented.
+
+The event-order state machine is gone: `companion/minimize_windows.go` now
+holds the pure `minimizeModel` (phases Shown, Priming, Minimized and
+Unsettled, 500 ms lateness bound, 1 s settle timeout, session latch, no
+re-prime), and `companion/minimize_hook_windows.go` holds the
+`minimizeController` that runs it on every tick and every matched minimize
+WinEvent through the three-method `minimizeWindow` seam, logging every
+decision. `main_windows.go` is wired to the controller and stays at 1846
+lines. Every planned test is present and passes, the pure-model coverage gate
+finds no uncovered block, and the six completion greps give the expected
+output. Review round 1 asked for a post-latch edge older than 500 ms to
+report `latched`. The writer keeps `unknown-age` for that edge, because plan
+Step 3 fixes the precedence as `unknown-age`, then `latched`, then `cap`,
+following the order of the design's target-behavior pseudo-code, and either
+reason skips the edge. `TestMinimizeModelLatchedSkipsEveryLaterEdge` now
+asserts that case, so the precedence is tested. One planned test assertion
+could not be written as worded, because it contradicts the design's Priming
+rule; the test checks the same stamping fact through the cancel-replay line
+instead (see "What was implemented for Step 2").
 
 ### Goal for Step 2
 
@@ -257,8 +275,8 @@ through a three-method window seam, with every decision logged.
 - An edge with an age bound over 500 ms is skipped with reason
   `unknown-age`; an edge during Priming cancels the replay with no restore.
 - An own call with an unexpected after-reading enters Unsettled; its
-  resolution latches interception off, and later edges are skipped with
-  reason `latched`.
+  resolution latches interception off. Later prompt edges are skipped with
+  reason `latched`; edges over the 500 ms age bound retain `unknown-age`.
 - An own restore that leaves the window iconic composes nothing and logs
   `minimize intercepted: restored=false replay=none`; every own call is
   stamped with the tick taken after its after-reading.
@@ -270,27 +288,220 @@ through a three-method window seam, with every decision logged.
 
 ### What was implemented for Step 2
 
-_(empty: no check has taken place yet.)_.
+- **Pure observation model**: `companion/minimize_windows.go` (279 lines, no
+  import, no `proc*` reference) deletes the Idle, Replaying and Committed
+  phases, the old `minimizeAction` values and `minimizeEventTransition`. It
+  adds the phases `minimizeShown`, `minimizePriming`, `minimizeMinimized`
+  and `minimizeUnsettled`, the constants `minimizeLatenessBoundMS = 500` and
+  `minimizeSettleTimeoutMS = 1000` (`minimizeReplayDelayMS = 75` kept), and
+  `minimizeModel` with `newMinimizeModel`, `observe`, `ownCall`,
+  `replayDue` and `showsMinimizedTrigger`. `observe` first resolves an
+  expired Unsettled phase from the last reading it held and latches. It then
+  handles the edge against that reading with the current phase's rules, so
+  the phase always follows the new reading, and it records `lastShownAt` on
+  every shown reading. A shown-to-iconic edge in Shown is skipped as
+  `unknown-age` when its bound exceeds 500 ms, even after the latch; otherwise
+  it is skipped as `latched` when latched, or intercepted. In Priming it
+  cancels the replay with the halo composed. In Unsettled it is absorbed when
+  it moves toward the expected state, and otherwise it is only logged. An
+  iconic-to-shown edge is honored from Minimized.
+- **Own-call absorption**: `ownCall(expectIconic, afterIconic, now)` takes the
+  after-reading as the last reading. It starts Priming with
+  `replayAt = now + 75`, completes Minimized with the halo, or enters
+  Unsettled with `settleDeadline = now + 1000` on any mismatch.
+- **Controller and window seam**: `companion/minimize_hook_windows.go` (251
+  lines, imports `fmt`, `log`, `syscall`, `unsafe`) adds the `minimizeWindow`
+  interface (`isIconic`, `showWindow`, `composeHalo`) and `minimizeController`
+  (`model`, `window`, `logger`, `clock`). `newMinimizeController` seeds the
+  model from one reading at `clock()`. `observe(now)` logs the latch line
+  `minimize interception disabled: own call unsettled (expected=<state>
+  observed=<state>)` and the `minimize edge` line, intercepts, and runs a due
+  replay. `onEvent` logs `minimize event: start|end age=<n>ms` and observes.
+  `ownRestore` (`SW_SHOWNOACTIVATE`, one `SW_RESTORE` fallback while still
+  iconic) and `ownReplay` (`SW_MINIMIZE`) read before and after, take
+  `clock()` after the after-reading, and log `own restore: ...
+  fallback=<bool>`, `own replay: ...` and `own call unsettled: ...`. An
+  intercept composes the halo and logs `restored=true replay-in=75ms` only
+  when the restore settled shown. Otherwise it logs `restored=false
+  replay=none` after the unsettled line. The kept replay lines stay, and the
+  legacy `minimize end` and re-prime lines are gone.
+- **Win32 adapter**: `*application` implements the seam with `isIconic`
+  (`procIsIconic`), `showWindow` (`procShowWindow`) and the existing
+  `composeHalo`. `minimizeWinEventProc` reads its seventh parameter as
+  `dwmsEventTime` and calls `app.minimize.onEvent(starting,
+  uint32(now)-uint32(dwmsEventTime), now)`, with a nil guard on the
+  controller. `restoreTargetForMinimizePriming` and `replayPendingMinimize`
+  are deleted.
+- **Wiring in `main_windows.go`**: `minimizeState` and `minimizeReplayAt` are
+  replaced by `minimize *minimizeController`. `main` builds it with
+  `newMinimizeController(app, logger, getTickCount64)` before
+  `installMinimizeHook`. `tick` calls `a.minimize.observe(now)` in place of
+  `replayPendingMinimize` and passes
+  `minimized != 0 || a.minimize.model.showsMinimizedTrigger()` to
+  `visibilityState`. `procGetTickCount64` joins the `kernel32` proc block and
+  `getTickCount64` calls it. The file stays at 1846 lines (net 0; the plan's
+  advisory estimate was net -1).
+- **Model tests**: `companion/minimize_windows_test.go` (410 lines) keeps
+  `TestMinimizeTransitionTargetsOnlyTheTrackedTopLevelWindow`, deletes the two
+  event-order tests, and adds the ten planned `TestMinimizeModel...` tests.
+  Since review round 1, `TestMinimizeModelLatchedSkipsEveryLaterEdge` also
+  feeds a post-latch edge with a 501 ms bound and asserts `unknown-age` with
+  the latch kept, pinning the plan's skip-reason precedence. It
+  also adds `TestMinimizeModelUnsettledRestoreAbsorbsTheLateRestore`, which
+  covers an unsettled restore and resolution followed by an edge in the same
+  observation, and `TestMinimizeModelNamesItsEdgesActionsAndStates`. It adds
+  `FuzzMinimizeModelObservations` with nine `f.Add` seeds: the recorded
+  reordered sequence, a stalled thread, an Unsettled replay applied late, a
+  restore during Priming, an unsettled restore, minimize-restore-minimize, a
+  one-second edge stream, an iconic host start, and late events in Priming.
+- **Controller tests**: new `companion/minimize_hook_windows_test.go` (286
+  lines) holds `fakeMinimizeWindow` (scripted `iconic`, a `showWindow` that
+  advances the fake clock by `showDelayMS` and applies or defers the change,
+  a command log, a composition counter and an optional compose error), a
+  buffered logger, the six planned `TestMinimizeController...` tests, and
+  `TestMinimizeControllerLogsRenderErrorsSkipsAndHonoredRestores`.
+- **Planned test deviation**: the plan asks
+  `TestMinimizeControllerStampsOwnCallsAfterTheAfterReading` for "an external
+  minimize 30 ms after the after-reading is intercepted with `age<=30ms`".
+  After an own restore the model is in Priming, and there a shown-to-iconic
+  edge cancels the replay and is never intercepted (design Q04, and this
+  plan's own `TestMinimizeModelEdgeDuringPrimingCancelsTheReplayWithoutRestore`).
+  So the test asserts the same stamping fact on the edge line that follows:
+  `minimize edge: shown->iconic age<=30ms action=cancel-replay`, with neither
+  `unknown-age` nor `age<=150ms` present. It also asserts `replayAt` = 1140 +
+  75 and an unsettled deadline of 1260 + 1000 with a 120 ms `ShowWindow`.
+- **Validation evidence**: `go test -v` gives 51 `--- PASS` lines (33 - 2
+  removed + 20 added); `gofmt -l` prints nothing; `go vet ./...` exits 0. The
+  first five completion greps print nothing, and the sixth finds one line
+  (`main_windows.go:161`, in the proc `var` block). The pure-model coverage
+  gate over `a.cover.minimize.out` passes. `ghog day` ends at `exit=9`
+  ("not a pytest project"), `scripts\test-companion.ps1` prints
+  `ok  workspace-halo/companion` and exits 0, and `npm test` exits 0 (8 pass).
+- **Line-budget variance (advisory)**: `minimize_windows.go` 279 (about 250
+  expected), `minimize_hook_windows.go` 251 (about 230),
+  `minimize_windows_test.go` 410 (about 330), `minimize_hook_windows_test.go`
+  286 (about 230). All stay below 550, so no split applies.
 
 ### New types or classes introduced for Step 2
 
-_(empty: no check has taken place yet.)_.
+- `minimizeModel`: the pure, value-typed interception state of one window,
+  with its transitions `observe`, `ownCall`, `replayDue` and
+  `showsMinimizedTrigger`.
+- `minimizeDecision`: the result of one observation (edge, age bound, action,
+  reason, `latchedNow`).
+- `minimizeEdge`: none, shown-to-iconic or iconic-to-shown, with its log name.
+- `minimizeAction` (redefined): none, intercept, cancel-replay, skip,
+  restore-honored, absorbed or settled, with its log name.
+- `minimizeWindow`: the three-method port the controller uses to reach the
+  window; `*application` is its Win32 adapter.
+- `minimizeController`: the application service that owns the model, executes
+  its actions through the port, absorbs its own calls and logs decisions.
+- `fakeMinimizeWindow` and `minimizeControllerFixture`: test-only scripted
+  window and controller fixture.
 
 ### Architecture check for Step 2
 
-_(empty: no check has taken place yet.)_.
+- **Pure domain model**: `minimize_windows.go` has no import and no `proc*`
+  reference (the fifth completion grep prints nothing). Every decision is a
+  value transition over `(iconic, now)` readings, so the domain stays
+  Win32-free as design Q03 requires.
+- **Port and adapter**: the controller depends only on the `minimizeWindow`
+  interface, a `*log.Logger` and a clock function, never on `proc*`
+  declarations. The Win32 calls sit in the `*application` adapter methods
+  and in the hook callback. Dependencies point from adapter to controller to
+  model, never back.
+- **Controller placement**: the controller shares `minimize_hook_windows.go`
+  with the Win32 adapter methods, as plan Q01 decided. It is an application
+  service beside its adapter in one file. The seam keeps them separable, but
+  the file mixes two roles.
+- **Global state carried over**: the callback still reaches the controller
+  through the global `activeApp`, as the pre-existing hook did. The step adds
+  a nil guard and no new global.
+- **Girth**: `main_windows.go` stays at 1846 lines, over the 650-line ceiling.
+  This step does not grow it, and the plan defers its split.
+
+Yes, there is something to address: the controller and the Win32 adapter
+share one file (as plan Q01 chose), the global `activeApp` is carried over,
+and `main_windows.go` is still oversized (deferred by the plan). No
+DDD-Hexagonal violation is introduced.
 
 ### Performance check for Step 2
 
-_(empty: no check has taken place yet.)_.
+- **No new `O(n^2)` or `O(n log n)` path**: every model transition is a
+  constant-size switch over a fixed struct, and no collection grows with the
+  number of minimizes or events.
+- **Hot-path bound**: each tick and each matched WinEvent costs one `IsIconic`
+  reading and one pure transition. An intercept adds at most two
+  `ShowWindow` calls with three readings, and a replay adds one `ShowWindow`
+  call with two readings. The tick keeps its existing visibility `IsIconic`
+  reading, so a tick now makes two constant-time `IsIconic` calls instead
+  of one.
+- **Startup or background path**: host start seeds the model from one
+  reading; `GetTickCount64` is now resolved once from the proc block instead
+  of on every call.
+- **File IO**: log lines are written only on an edge, an own call, a matched
+  WinEvent, an Unsettled change or a latch; a quiet tick writes nothing.
+- **Plan-bound alignment**: the step stays within the plan's O(1) per event
+  bound.
+
+No, there is no performance issue that needs to be addressed for Step 2.
 
 ### Unit test coverage check for Step 2
 
-_(empty: no check has taken place yet.)_.
+The repository has no pytest suite and no configured coverage threshold. The
+plan's pure-model coverage gate (Q08) measures only `minimize_windows.go`, and
+this check reads its result from the profile; the hook file is evidence-only.
+
+- **`minimize_windows.go`**: 100% of its statements, from
+  `minimize_windows_test.go`; the gate finds no zero-count block, and
+  `go tool cover -func` reports 100% for every function.
+- **`minimize_hook_windows.go` controller**: `newMinimizeController`,
+  `observe`, `onEvent`, `logEdge`, `intercept`, `replay`, `ownRestore`,
+  `ownReplay` and `settleOwnCall` are at 100%, from
+  `minimize_hook_windows_test.go`.
+- **`minimize_hook_windows.go` Win32 adapter**: `installMinimizeHook`,
+  `minimizeWinEventProc`, `isIconic`, `showWindow` and `composeHalo` are at
+  0%. They call Win32 on a real window and are unreachable in unit tests, as
+  plan Q08 accepts. Every one of them is referenced inside the package: by
+  `main`, by the `minimizeWinEventCallback` variable, and through the
+  `minimizeWindow` interface.
+- **Fuzz invariant on own restores**: "every intercept is followed by exactly
+  one own restore" is enforced by the fuzz harness, which applies exactly one
+  `ownCall(false, ...)` per intercept before the next observation, rather
+  than checked as a model property.
+- **`main_windows.go`**: legacy, below 100% as before (Win32 rendering,
+  message loop and target acquisition); the plan defers that file.
+
+Yes, there is a unit-tested class below 100% that needs completing for
+Step 2: `minimize_hook_windows.go` is below 100% because of its five Win32
+adapter functions (evidence-only by plan Q08), and `main_windows.go` stays
+below 100% (legacy, deferred). No, none of the top-level symbols of the files
+outside the gate is unreferenced.
 
 ### Feature integrity for Step 2
 
-_(empty: no check has taken place yet.)_.
+- **Existing feature behavior**: a prompt user minimize is still restored
+  once, composed with the halo and replayed after 75 ms, so the thumbnail
+  halo is kept. The intended changes are that late, duplicated or reordered
+  events no longer re-intercept, that there is no re-prime, and that minimizes
+  of unknown age or after the latch go through without the halo.
+- **Visibility trigger**: the `minimized` trigger stays on in every phase
+  except Shown, as the old non-Idle test did, so the halo still shows during
+  Priming and Unsettled.
+- **Reporting or diagnostics**: the kept lines `minimize intercepted:
+  restored=true replay-in=75ms`, `minimize replay requested after halo
+  composition` and `minimize replay accepted with composed halo` are written
+  as before. `minimize end` and the re-prime line are replaced by the
+  `restore-honored` edge line and the `minimize event: end` line, as plan
+  Q10 decided. New lines log edges, events with their age, own calls,
+  Unsettled outcomes and the latch.
+- **Compatibility or rollout note**: the replay's halo is composed right
+  before `SW_MINIMIZE`, as before. The second composition that the old code
+  made when the replayed `MinimizeStart` arrived is gone, because the tick
+  keeps rendering the halo while the `minimized` trigger holds. No
+  TypeScript change, and `npm test` stays green.
+
+No existing feature or reporting capability appears impaired.
 
 ---
 
