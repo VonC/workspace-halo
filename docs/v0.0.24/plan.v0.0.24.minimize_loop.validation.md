@@ -6,8 +6,7 @@ This document tracks the four steps of
 [plan.v0.0.24.minimize_loop.md](plan.v0.0.24.minimize_loop.md): the minimize
 code split, the observation model with own-call absorption and session latch,
 the interception cap, and the acceptance scenarios with documentation and the
-manual unplug. Steps 1 and 2 are implemented; Steps 3 and 4 have not
-started.
+manual unplug. Steps 1, 2 and 3 are implemented; Step 4 has not started.
 
 > Initial-skeleton note: this first version was written by the `write-plans`
 > skill, before any implementation check. Every section that needs a check
@@ -509,8 +508,21 @@ No existing feature or reporting capability appears impaired.
 
 ### Analysis of Step 3 implementation state
 
-Not started. Step 3 is not implemented because no `minimizeCap`, cap constants
-or cap log lines exist yet.
+Yes. Step 3 has been fully implemented.
+
+`companion/minimize_windows.go` now holds the pure `minimizeCap` (2
+interceptions in 2000 ms, a 5000 ms quiet period) as field `cap` of
+`minimizeModel`, run by `observe` in the plan's fixed order: resolve an
+expired Unsettled, resume a quiet cap, record every external shown-to-iconic
+edge as an attempt while suspended, then skip with the precedence
+`unknown-age`, `latched`, `cap` (a first closed cap trips here), or intercept
+and record its tick. `minimizeController.observe` logs the trip and resume
+lines. Every planned test is present and passes, the fuzz target checks the
+four cap properties, the two completion greps find the three constants and
+both log formats, and the pure-model coverage gate finds no uncovered block.
+`minimize_windows_test.go` went past 550 lines, so the plan's split guidance
+was applied: the fuzz target moved to `minimize_fuzz_windows_test.go` and the
+cap tests to `minimize_cap_windows_test.go`.
 
 ### Goal for Step 3
 
@@ -536,27 +548,182 @@ at all, with the trip and the resume logged.
 
 ### What was implemented for Step 3
 
-_(empty: no check has taken place yet.)_.
+- **Cap constants and reason**: `companion/minimize_windows.go` (361 lines,
+  still no import and no `proc*` reference) adds `minimizeCapCount = 2`,
+  `minimizeCapWindowMS = 2000` and `minimizeCapQuietMS = 5000`, and the skip
+  reason `minimizeReasonCap = "cap"`.
+- **Pure cap value**: `minimizeCap` holds `intercepts
+  [minimizeCapCount]uint64` with its fill count `filled`, `suspended` and
+  `lastAttemptAt`. The plan names the array a ring; it is kept oldest first
+  and shifted by one on each record, which is the same fixed two-slot window
+  in O(1) and lets `closed` read the oldest tick at index 0. `closed(now)` is
+  suspended, or two recorded interceptions with the oldest less than 2000 ms
+  old (the window is exclusive: a third edge exactly 2000 ms after the first
+  is intercepted). `recordIntercept(now)` adds a tick. `recordAttempt(now)`
+  moves `lastAttemptAt` to `now`, sets `suspended`, and reports `tripped`
+  when the cap was not suspended yet. `maybeResume(now)` returns a cleared
+  cap and `resumed` once `now - lastAttemptAt >= 5000` while suspended.
+- **Observation order**: `observe` calls `maybeResume` right after the
+  Unsettled resolution, on every observation with or without an edge.
+  `shownToIconic` now takes `now`. After the Unsettled case (an absorbed or
+  logged edge), it calls `recordAttempt` for every shown-to-iconic edge while
+  suspended, before the Priming cancellation and before any skip, so
+  `unknown-age`, `latched` and `cap` edges all move the quiet timer. In Shown
+  the precedence is `unknown-age`, then `latched`, then `cap` when
+  `closed(now)` (a not-yet-suspended cap trips there and sets `capTripped`),
+  else intercept with `recordIntercept(now)` at the decision, so an intercept
+  whose restore ends Unsettled still counts. A Priming cancellation is never
+  recorded as an interception. `minimizeDecision` gains `capTripped` and
+  `capResumed`.
+- **Controller log lines**: `companion/minimize_hook_windows.go` (265 lines)
+  logs `minimize interception resumed after 5000ms quiet` before the edge
+  line on `capResumed`, and `minimize interception suspended: 2 intercepts in
+  2000ms` after it on `capTripped`, both formatted from the constants.
+- **Cap tests**: new `companion/minimize_cap_windows_test.go` (165 lines) holds
+  the helpers `minimizeEdgeAfter` and `trippedMinimizeModel` and the five
+  planned tests. `TestMinimizeCapAllowsTwoInterceptionsWithinTheWindow` also
+  pins the exclusive window. `TestMinimizeCapTripsOnTheThirdEdgeWithinTwoSeconds`
+  checks the trip is reported once and that a late third edge keeps
+  `unknown-age` without tripping.
+  `TestMinimizeCapStaysClosedDuringAContinuingStream` feeds 20 edges one
+  second apart, alternating prompt and `unknown-age`, to the tripped model and
+  to a latched copy, and checks `lastAttemptAt`, the suspension, the reason
+  precedence and the absence of any resume.
+  `TestMinimizeCapResumesAfterFiveSecondsWithoutAnyEdge` covers the T + 4999,
+  T + 5000, T + 9998 and T + 9999 boundaries and the resume then intercept in
+  one observation. `TestMinimizeCapIgnoresPrimingCancellations` shows that an
+  edge after a cancellation is still intercepted as the second one.
+- **Fuzz extension**: `minimizeFuzzCapTrace` follows the cap from outside the
+  model and checks, on every observation, the four planned properties: no
+  three intercepts within 2000 ms, no intercept while suspended (unless it
+  resumed in the same observation), `lastAttemptAt` on the latest external
+  shown-to-iconic edge while suspended, and no resume less than 5000 ms after
+  that edge. Two seeds are added (a cap trip with late and prompt edges then a
+  resume, and a one-second edge stream after a trip), so there are 11.
+- **Controller test**: `TestMinimizeControllerLogsCapTripAndResume` in
+  `companion/minimize_hook_windows_test.go` (323 lines, with a new
+  `externalRestore` fixture helper) runs two intercepts, a capped third edge
+  with its `reason=cap` edge line and the suspended line, no resume up to
+  4980 ms after that edge, the resumed line at 5005 ms, and a new intercept.
+- **Test file split (plan split guidance)**: with the cap tests added,
+  `minimize_windows_test.go` reached 622 lines, past the 550 threshold. As the
+  plan orders, the fuzz target and its decoder moved to new
+  `companion/minimize_fuzz_windows_test.go` (170 lines, the Step 2 fuzz
+  split), and the cap tests to new `companion/minimize_cap_windows_test.go`.
+  `minimize_windows_test.go` is back to 307 lines and keeps the Step 2 model
+  tests. `minimize_windows.go` stays at 361 lines, below 550, so no
+  `minimize_cap_windows.go` split applies.
+- **Validation evidence**: `go test -v` gives 57 top-level `--- PASS` lines
+  (51 + 6 added) and 11 fuzz seed passes; `gofmt -l` prints nothing; `go vet
+  ./...` exits 0. The first completion grep finds the three constants
+  (`minimize_windows.go:109-111`) and the second finds both log formats in
+  `minimize_hook_windows.go` (lines 74 and 79) and their test assertions. The
+  pure-model coverage gate over `a.cover.minimize.out` passes (60 blocks, none
+  at zero). `ghog day` ends at `exit=9` ("not a pytest project"),
+  `scripts\test-companion.ps1` prints `ok  workspace-halo/companion` and exits
+  0, and `npm test` exits 0 (8 pass). As extra evidence, a mutation that
+  disables the `closed(now)` case fails five of the new tests and the fuzz
+  seeds. A 30 s `go test -fuzz` session run on a scratch copy of `companion`
+  (232444 executions) found no failing input, so nothing was written to the
+  repository.
+- **Line-budget variance (advisory)**: `minimize_windows.go` 361 (about 330
+  expected), `minimize_hook_windows.go` 265 (about 240),
+  `minimize_hook_windows_test.go` 323 (about 260). `minimize_windows_test.go`
+  was expected at about 460; the split leaves it at 307 plus the two new
+  files. Every file stays below 550, and `main_windows.go` is unchanged at
+  1846.
 
 ### New types or classes introduced for Step 3
 
-_(empty: no check has taken place yet.)_.
+- `minimizeCap`: the pure, value-typed interception cap of one window (the
+  last two interception ticks, the suspension and the latest attempt tick),
+  with `closed`, `recordIntercept`, `recordAttempt` and `maybeResume`.
+- `minimizeDecision` (extended): `capTripped` and `capResumed`.
+- `minimizeFuzzCapTrace`: test-only external trace of intercept and edge ticks
+  for the fuzz cap properties.
 
 ### Architecture check for Step 3
 
-_(empty: no check has taken place yet.)_.
+- **Pure domain model**: the cap lives in `minimize_windows.go` with the
+  model, as design Q03 places the cap logic. The file still has no import and
+  no `proc*` reference, and every cap operation is a value transition over
+  ticks.
+- **Port and adapter**: the controller only reads the two decision flags and
+  logs; it takes no cap decision and makes no new Win32 call. No dependency
+  points from the model toward the controller or the adapter.
+- **Invariant documented in code**: `shownToIconic` records attempts after the
+  Unsettled case, because Unsettled only follows an interception and so never
+  coexists with a suspended cap; its doc comment says so, and the fuzz trace
+  checks the resulting `lastAttemptAt` property.
+- **Carried over from Step 2**: the controller still shares
+  `minimize_hook_windows.go` with the Win32 adapter (plan Q01), the callback
+  still reaches it through the global `activeApp`, and `main_windows.go` is
+  still 1846 lines (deferred by the plan). Step 3 does not touch any of them.
+
+Yes, there is something to address: nothing new, but the three Step 2
+carry-overs remain (controller and adapter in one file, the global
+`activeApp`, the oversized `main_windows.go`). Step 3 introduces no
+DDD-Hexagonal violation or smell.
 
 ### Performance check for Step 3
 
-_(empty: no check has taken place yet.)_.
+- **No new `O(n^2)` or `O(n log n)` path**: `minimizeCap` is a fixed
+  two-slot array plus three scalars. `recordIntercept` shifts at most one
+  element, and `closed`, `recordAttempt` and `maybeResume` are constant-time
+  comparisons.
+- **Hot-path bound**: each observation adds one `maybeResume` check and, on a
+  shown-to-iconic edge, at most one `closed` check and one record. No new
+  Win32 call, allocation or growing history.
+- **File IO**: two lines are added, written only when the cap trips or
+  resumes; a quiet tick still writes nothing.
+- **Test-only cost**: the fuzz trace keeps at most three intercept ticks in a
+  slice; it is not on the host path.
+
+No, there is no performance issue that needs to be addressed for Step 3.
 
 ### Unit test coverage check for Step 3
 
-_(empty: no check has taken place yet.)_.
+The repository has no pytest suite and no configured coverage threshold. The
+plan's pure-model coverage gate (Q08) measures only `minimize_windows.go`
+(and `minimize_cap_windows.go`, which does not exist since no split was
+needed); the hook file is evidence-only.
+
+- **`minimize_windows.go`**: 100% of its statements, from
+  `minimize_windows_test.go`, `minimize_cap_windows_test.go` and the seeds of
+  `minimize_fuzz_windows_test.go`, the three test files of that one class
+  file. The gate finds no zero-count block, and `go tool cover -func` reports
+  100% for `closed`, `recordIntercept`, `recordAttempt`, `maybeResume`,
+  `observe` and `shownToIconic`, as for every other function.
+- **`minimize_hook_windows.go` controller**: `observe`, including its two new
+  log branches, stays at 100% with `TestMinimizeControllerLogsCapTripAndResume`,
+  and so do the other controller functions.
+- **`minimize_hook_windows.go` Win32 adapter**: `installMinimizeHook`,
+  `minimizeWinEventProc`, `isIconic`, `showWindow` and `composeHalo` stay at
+  0%, unchanged by this step. They call Win32 on a real window, as plan Q08
+  accepts, and each is referenced inside the package.
+- **`main_windows.go`**: not touched; legacy, below 100%, deferred by the
+  plan.
+
+Yes, there is a unit-tested class below 100% that needs completing for
+Step 3: as in Step 2, `minimize_hook_windows.go` is below 100% because of its
+five Win32 adapter functions (evidence-only by plan Q08), and `main_windows.go`
+stays below 100% (legacy, deferred). No, none of the top-level symbols of the
+files outside the gate is unreferenced.
 
 ### Feature integrity for Step 3
 
-_(empty: no check has taken place yet.)_.
+- **Existing feature behavior**: normal use is unchanged. One minimize, or a
+  minimize, restore and minimize within 2 s, is intercepted and replayed with
+  the halo as in Step 2; only a third interception within 2 s is skipped.
+- **Skipped cases**: a capped minimize goes through without the halo, as the
+  `unknown-age` and `latched` ones do, and interception comes back only after
+  5 s with no external minimize.
+- **Reporting or diagnostics**: every Step 2 line is still written; the cap
+  adds its `reason=cap` edge lines and the suspended and resumed lines.
+- **Compatibility or rollout note**: no TypeScript change, and `npm test`
+  stays green. The wiki and changelog updates for the cap belong to Step 4.
+
+No existing feature or reporting capability appears impaired.
 
 ---
 
