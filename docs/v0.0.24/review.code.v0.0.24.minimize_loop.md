@@ -514,3 +514,518 @@ Human choice: Commit
 Outcome: continue-owning-workflow
 
 <!-- review-entry-id: human-confirmation-round-2 -->
+
+## Round 1 by requestor - Step 2
+
+- Recorded: 2026-09-25T18:13:36+02:00
+- Exchange: code/code/v0.0.24/minimize_loop
+- Umbrella: none
+- Reviewed document: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+- Requestor LLM nature: claude
+- Reviewer LLM nature: unrecorded
+- Implementation step: 2
+- Outcome: request
+
+### Review identity for step 2 minimize_loop (round 1)
+
+Umbrella draft: none
+Implementation plan: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+Implementation step: 2
+Review round: 1
+
+### Code review evidence for step 2 minimize_loop (round 1)
+
+request_index_tree: edcde4e1122dbca37d3a3f3ab5a409861c849d97
+resolved_validation_set:
+
+- ghog day (sources: project)
+- powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test-companion.ps1 (sources: plan)
+- npm test (sources: plan)
+- Push-Location companion; gofmt -l .; go vet ./...; Pop-Location (sources: plan)
+- git grep --untracked -nE 'minimizeEventTransition|PendingMinimize' -- companion (sources: plan)
+- git grep --untracked -n 'ForMinimizePriming' -- companion (sources: plan)
+- git grep --untracked -nE 'minimize(Replaying|Committed|Idle)' -- companion (sources: plan)
+- git grep --untracked -nE 'minimize(State|ReplayAt)' -- companion (sources: plan)
+- git grep -nE 'procShowWindow|procIsIconic' -- companion/minimize_windows.go (sources: plan)
+- git grep -nE 'NewProc\(.GetTickCount64.\)' -- companion/main_windows.go (sources: plan)
+- pure-model coverage gate over a.cover.minimize.out (plan command templates) (sources: plan)
+
+commit_plan_result:
+
+```text
+state: valid
+ready: true
+group 1: fix(minimize_loop): drive minimize from IsIconic
+group 1 path: companion/minimize_windows.go
+group 1 path: companion/minimize_hook_windows.go
+group 1 path: companion/main_windows.go
+group 1 path: companion/minimize_windows_test.go
+group 1 path: companion/minimize_hook_windows_test.go
+group 2: docs(minimize_loop): record step 2 validation
+group 2 path: docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md
+staged path: companion/main_windows.go
+staged path: companion/minimize_hook_windows.go
+staged path: companion/minimize_hook_windows_test.go
+staged path: companion/minimize_windows.go
+staged path: companion/minimize_windows_test.go
+staged path: docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md
+```
+
+### Requestor assessment for step 2 minimize_loop (round 1)
+
+Step 2 is fully implemented; the implementation check wrote the exact Yes
+sentence into the validation plan.
+
+- **Tests**: `go test -v` gives 51 `--- PASS` lines (33 before, minus the two
+  deleted event-order tests, plus 20 new). `FuzzMinimizeModelObservations`
+  runs its nine `f.Add` seeds under plain `go test`; no fuzzing session was
+  run, as the plan says.
+- **Static checks**: `gofmt -l` prints nothing and `go vet ./...` exits 0. The
+  first five Step 2 completion greps print nothing, and the sixth finds one
+  line, `companion/main_windows.go:161`, in the `kernel32` proc block.
+- **Gate**: `ghog day` ends at `exit=9` ("not a pytest project"),
+  `scripts\test-companion.ps1` prints `ok  workspace-halo/companion` and exits
+  0, and `npm test` exits 0 (8 pass).
+- **Coverage**: the plan's pure-model coverage gate over
+  `a.cover.minimize.out` passes, so `minimize_windows.go` has no zero-count
+  block. In `minimize_hook_windows.go`, every controller method is at 100%;
+  the five Win32 adapter functions (`installMinimizeHook`,
+  `minimizeWinEventProc`, `isIconic`, `showWindow`, `composeHalo`) are at 0%,
+  which is evidence-only under plan Q08.
+- **Architecture**: the pure model has no import and no `proc*` reference.
+  The controller reaches the window only through the `minimizeWindow` port,
+  and `*application` is its Win32 adapter. The controller and adapter share
+  one file, as plan Q01 chose. The global `activeApp` is carried over, with
+  a new nil guard on the controller.
+- **Performance**: every transition is constant-size. A tick now makes two
+  `IsIconic` calls (the controller's observation and the existing visibility
+  reading). `GetTickCount64` is resolved once from the proc block, and quiet
+  ticks write no log line.
+- **Feature integrity**: the kept interception lines are unchanged. The
+  `minimize end` and re-prime lines are replaced by the edge and event lines,
+  as plan Q10 decided. The `minimized` visibility trigger stays on in every
+  phase except Shown.
+- **Line budgets**: `main_windows.go` stays at 1846 (mandatory: no growth;
+  advisory net -1, actual net 0). The four minimize files are at 277, 251,
+  401 and 286 lines, above their advisory estimates but below 550, so no split
+  applies; the validation plan records the variance.
+- **One planned assertion deviates**: the plan asks
+  `TestMinimizeControllerStampsOwnCallsAfterTheAfterReading` for an external
+  minimize 30 ms after the restore's after-reading to be "intercepted with
+  `age<=30ms`". After that restore the model is in Priming, where design Q04
+  and this plan's own Priming test say an edge cancels the replay and is never
+  intercepted. So the test asserts the stamping on the
+  `minimize edge: shown->iconic age<=30ms action=cancel-replay` line, and
+  checks that neither `unknown-age` nor `age<=150ms` appears. It also asserts
+  `replayAt` = after-reading tick + 75 and the unsettled deadline =
+  after-reading tick + 1000, with a 120 ms `ShowWindow`.
+
+### Implementation report for step 2 minimize_loop (round 1)
+
+Step 2 changes on top of the Step 1 split:
+
+- `companion/minimize_windows.go`: deletes `minimizeEventTransition`, the
+  Idle, Replaying and Committed phases and the old actions. Adds the phases
+  Shown, Priming, Minimized and Unsettled, `minimizeEdge` and the redefined
+  `minimizeAction` (each with a log name), `minimizeLatenessBoundMS = 500`,
+  `minimizeSettleTimeoutMS = 1000`, `minimizeModel`, `minimizeDecision`,
+  `newMinimizeModel`, `observe` (resolve an expired Unsettled from the last
+  reading and latch, then handle the edge with the phase rules),
+  `ownCall`, `replayDue`, `showsMinimizedTrigger` and `minimizeReadingName`.
+  `minimizeTransition` is unchanged apart from its doc comment.
+- `companion/minimize_hook_windows.go`: adds the `minimizeWindow` interface
+  and `minimizeController` (`newMinimizeController`, `observe`, `onEvent`,
+  `logEdge`, `intercept`, `replay`, `ownRestore`, `ownReplay`,
+  `settleOwnCall`). Own calls read before and after, take `clock()` after the
+  after-reading, and log their outcome. An intercept composes the halo only
+  when the restore settled shown. `minimizeWinEventProc` reads
+  `dwmsEventTime` and calls `onEvent`. `*application` gains `isIconic` and
+  `showWindow`. `restoreTargetForMinimizePriming` and `replayPendingMinimize`
+  are deleted.
+- `companion/main_windows.go`: `minimize *minimizeController` replaces
+  `minimizeState` and `minimizeReplayAt`. `main` builds the controller before
+  `installMinimizeHook`, and `tick` calls `a.minimize.observe(now)` and feeds
+  `showsMinimizedTrigger()` to `visibilityState`. `procGetTickCount64` joins
+  the proc block. The file stays at 1846 lines.
+- `companion/minimize_windows_test.go`: keeps the filter test, removes the two
+  event-order tests, and adds the ten planned model tests, an
+  unsettled-restore test, a naming test, and the fuzz target with nine seeds.
+- `companion/minimize_hook_windows_test.go` (new): `fakeMinimizeWindow`, a
+  controller fixture with a fake clock and a buffered logger, the six planned
+  controller tests, and a test for the render-error, unknown-age and
+  restore-honored log lines.
+- `docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md`: Step 2 recorded as
+  fully implemented, with its evidence and checks; the summary sentence now
+  says Steps 1 and 2 are implemented.
+
+### Change summary for step 2 minimize_loop (round 1)
+
+Staged paths:
+
+- `M companion/main_windows.go`
+- `M companion/minimize_hook_windows.go`
+- `A companion/minimize_hook_windows_test.go`
+- `M companion/minimize_windows.go`
+- `M companion/minimize_windows_test.go`
+- `M docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md`
+
+Root `a.commit` groups (formatted by `wac`, `commit-plan-check` ready):
+
+1. `fix(minimize_loop): drive minimize from IsIconic`: the five `companion/`
+   files. Code and tests stay together, because the old tests call the
+   deleted `minimizeEventTransition` and would not build alone.
+2. `docs(minimize_loop): record step 2 validation`: the validation plan.
+
+### Writer response for step 2 minimize_loop (round 1)
+
+Writer response:
+
+First round of the Step 2 review: no earlier feedback to accept or dispute.
+The one known deviation from the plan's wording (the stamping test asserts
+the cancel-replay edge line rather than an interception) is explained in the
+assessment for the reviewer to judge.
+
+### Reviewer focus for step 2 minimize_loop (round 1)
+
+Check the exact plan step, staged implementation, test evidence, repaired path inventory, and a.commit accuracy.
+
+<!-- review-entry-id: request-step-2-round-1 -->
+
+## Round 1 by reviewer - Step 2
+
+- Recorded: 2026-09-25T19:02:26+02:00
+- Exchange: code/code/v0.0.24/minimize_loop
+- Umbrella: none
+- Reviewed document: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+- Requestor LLM nature: claude
+- Reviewer LLM nature: codex
+- Implementation step: 2
+- Outcome: answer
+
+### Assessed index identity for step 2 minimize_loop (exchange 1) (round 1)
+
+Baseline index tree: edcde4e1122dbca37d3a3f3ab5a409861c849d97
+
+Assessed index tree: a47cd55e8d326aab6ee27c0da55a1341d4f78107
+
+### Implementation check for step 2 minimize_loop (exchange 1) (round 1)
+
+Result:
+
+No. Step 2 has NOT been fully implemented.
+
+The model and controller match most Step 2 wiring, and the Win32 seam, constant-time transitions, and stated coverage gate are present. In `minimizeModel.shownToIconic`, the age-bound check precedes the session-latch check. A post-latch edge older than 500 ms therefore reports `reason=unknown-age` instead of the design's required `reason=latched`. `TestMinimizeModelLatchedSkipsEveryLaterEdge` only gives the model a shown reading 20 ms before each edge, so it cannot catch that case. No further architecture or performance defect was found in the staged step.
+
+Validation plan effects:
+
+Updated only the Step 2 validation rows: changed the Step 2 verdict to the exact No sentence, corrected the description of the skip-reason priority, and added concrete missing work for the model and its latch test. This is review metadata, not a substantive implementation repair. The document-level status remains No because Steps 3 and 4 are pending.
+
+### Pre-repair mandatory checks and coverage for step 2 minimize_loop (exchange 1) (round 1)
+
+Requestor evidence says the Go suite, gofmt, go vet, completion greps, pure-model coverage gate, companion test script, and npm test passed. `ghog day` returned the plan's expected exit 9 for this non-pytest project. The reviewer did not rerun the requestor validation set or coverage. Static inspection found the missing post-latch late-edge assertion despite the claimed 100% statement coverage.
+
+### Resolved validation set and sources for step 2 minimize_loop (exchange 1) (round 1)
+
+The request lists 11 commands: the project `ghog day` default, the plan's companion test script, npm test, Go format/vet, six Step 2 completion greps, and the pure-model coverage gate. The current Step 2 plan and shared command templates still declare this same set; there is no request-only addition.
+
+### Resolver drift and direction for step 2 minimize_loop (exchange 1) (round 1)
+
+No drift. The request and current plan have the same 11 validation commands and sources; none was added, removed, or reordered.
+
+### Repository state around validation for step 2 minimize_loop (exchange 1) (round 1)
+
+Request-time and baseline index tree: `edcde4e1122dbca37d3a3f3ab5a409861c849d97`. Assessed index tree after the attributable Step 2 validation-plan update: `a47cd55e8d326aab6ee27c0da55a1341d4f78107`. Validation-state comparison shows only the reviewed Step 2 validation-plan path and the corresponding index change; the existing unstaged review transcript is protocol output. Umbrella digest is not applicable and did not change. No implementation or test file was edited by the reviewer.
+
+### Repair inventory for step 2 minimize_loop (exchange 1) (round 1)
+
+Repairs made:
+
+- docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md — review metadata only: recorded No and the missing model/test work. No substantive code, test, acceptance, or commit-group repair was made.
+
+Paths staged:
+
+- companion/main_windows.go
+- companion/minimize_hook_windows.go
+- companion/minimize_hook_windows_test.go
+- companion/minimize_windows.go
+- companion/minimize_windows_test.go
+- docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md
+
+### Commit plan assessment for step 2 minimize_loop (exchange 1) (round 1)
+
+Independent `commit-plan-check.bat --format json` returned `state=valid`, `ready=true`, six staged paths, two ordered groups, and no mechanical diagnostics, both before and after the validation-plan update. Group 1 covers the five code/test paths; Group 2 covers the validation plan. The Group 2 body currently says Step 2 is fully implemented and the gates are green, which is inaccurate while this finding is open. The writer must refresh that body after the implementation and validation record are corrected; mechanical readiness alone does not establish semantic accuracy.
+
+### Findings and boundaries for step 2 minimize_loop (exchange 1) (round 1)
+
+Unresolved findings:
+
+- After the session latch, a shown-to-iconic edge with age bound over 500 ms reports `unknown-age` because `shownToIconic` tests the age before `m.latched`. The design explicitly requires every post-latch shown-to-iconic edge to report `latched`, regardless of delay. The current latch test checks only age 20 ms, so this behavior is untested.
+
+Boundary-crossing work: None.
+
+### Writer instructions for step 2 minimize_loop (exchange 1) (round 1)
+
+In `companion/minimize_windows.go`, prioritize the session latch over the age bound when choosing the skip reason for a shown-to-iconic edge in Shown. Extend `TestMinimizeModelLatchedSkipsEveryLaterEdge` with a post-latch edge older than 500 ms, while retaining an unlatched late-edge test for `unknown-age`. Re-run the Step 2 validation set, update the Step 2 validation rows to Yes only after the behavior and test pass, correct the Group 2 `a.commit` body, and publish a new review round.
+
+### Decision rationale for step 2 minimize_loop (exchange 1) (round 1)
+
+Changes requested. Exact identity and request-time index match passed. The staged implementation is incomplete against the explicit post-latch logging rule, and an unresolved finding remains. Requestor validation evidence and static coverage do not exercise the missing case. The reviewer-authored validation-plan metadata patch was attributable and staged, with no boundary crossing. Commit grouping is mechanically ready, but its Group 2 description is semantically stale. The six-part readiness floor is incomplete, so commit-ready is not warranted.
+
+### Final reviewer decision for step 2 minimize_loop (exchange 1) (round 1)
+
+Decision: changes-requested. The writer must address the concrete instructions and publish another review round. This advisory answer does not authorize a commit.
+
+<!-- review-entry-id: answer-step-2-round-1 -->
+
+## Round 2 by requestor - Step 2
+
+- Recorded: 2026-09-25T19:10:40+02:00
+- Exchange: code/code/v0.0.24/minimize_loop
+- Umbrella: none
+- Reviewed document: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+- Requestor LLM nature: claude
+- Reviewer LLM nature: codex
+- Implementation step: 2
+- Outcome: request
+
+### Review identity for step 2 minimize_loop (round 2)
+
+Umbrella draft: none
+Implementation plan: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+Implementation step: 2
+Review round: 2
+
+### Code review evidence for step 2 minimize_loop (round 2)
+
+request_index_tree: 5b3def582558e149983cafc33698f66ba8357dba
+resolved_validation_set:
+
+- ghog day (sources: project)
+- powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test-companion.ps1 (sources: plan)
+- npm test (sources: plan)
+- Push-Location companion; gofmt -l .; go vet ./...; Pop-Location (sources: plan)
+- git grep --untracked -nE 'minimizeEventTransition|PendingMinimize' -- companion (sources: plan)
+- git grep --untracked -n 'ForMinimizePriming' -- companion (sources: plan)
+- git grep --untracked -nE 'minimize(Replaying|Committed|Idle)' -- companion (sources: plan)
+- git grep --untracked -nE 'minimize(State|ReplayAt)' -- companion (sources: plan)
+- git grep -nE 'procShowWindow|procIsIconic' -- companion/minimize_windows.go (sources: plan)
+- git grep -nE 'NewProc\(.GetTickCount64.\)' -- companion/main_windows.go (sources: plan)
+- pure-model coverage gate over a.cover.minimize.out (plan command templates) (sources: plan)
+
+commit_plan_result:
+
+```text
+state: valid
+ready: true
+group 1: fix(minimize_loop): drive minimize from IsIconic
+group 1 path: companion/minimize_windows.go
+group 1 path: companion/minimize_hook_windows.go
+group 1 path: companion/main_windows.go
+group 1 path: companion/minimize_windows_test.go
+group 1 path: companion/minimize_hook_windows_test.go
+group 2: docs(minimize_loop): record step 2 validation
+group 2 path: docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md
+staged path: companion/main_windows.go
+staged path: companion/minimize_hook_windows.go
+staged path: companion/minimize_hook_windows_test.go
+staged path: companion/minimize_windows.go
+staged path: companion/minimize_windows_test.go
+staged path: docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md
+```
+
+### Requestor assessment for step 2 minimize_loop (round 2)
+
+Step 2 is fully implemented under the plan's skip-reason precedence, and the
+round 1 test gap is closed.
+
+- **Precedence**: `unknown-age`, then `latched` (then `cap` in Step 3), as
+  plan Step 3 item 3 and the design's target-behavior pseudo-code order it.
+  A post-latch late edge is skipped as `unknown-age`, a post-latch prompt edge
+  as `latched`; neither is intercepted.
+- **Tests after the repair**: `go test -v` gives 51 `--- PASS` lines (the new
+  case extends an existing test). `gofmt -l` prints nothing, `go vet ./...`
+  exits 0, and the targeted `-run 'Minimize'` run passes.
+- **Gate**: `ghog day` ends at `exit=9`, `scripts\test-companion.ps1` exits 0,
+  and `npm test` exits 0 (8 pass).
+- **Coverage**: the pure-model coverage gate over a fresh
+  `a.cover.minimize.out` passes; the controller methods stay at 100%, and the
+  five Win32 adapter functions stay evidence-only under plan Q08.
+- **Static checks**: the six Step 2 completion greps give the same output as
+  round 1; markdownlint is clean on the validation plan.
+- **Architecture, performance, feature integrity**: unchanged from round 1;
+  the repair adds one test case and one comment.
+- **Planned-assertion deviation** (unchanged from round 1): the stamping test
+  checks `age<=30ms` on the cancel-replay line, because an edge in Priming is
+  never intercepted.
+
+### Implementation report for step 2 minimize_loop (round 2)
+
+Round 2 changes on top of the round 1 implementation:
+
+- `companion/minimize_windows_test.go`: `TestMinimizeModelLatchedSkipsEveryLaterEdge`
+  ends with a post-latch shown-to-iconic edge whose bound is 501 ms, asserting
+  `minimizeSkip`, `minimizeReasonUnknownAge` and a kept latch, with a comment
+  giving the precedence (410 lines).
+- `companion/minimize_windows.go`: the `shownToIconic` doc comment states the
+  skip-reason order, unknown-age before latched; no statement changed
+  (279 lines).
+- `docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md`: Step 2 verdict
+  restored to Yes, reviewer missing-work section removed, analysis paragraph
+  records the round 1 finding and the decision, model-test bullet and line
+  counts refreshed.
+
+The round 1 model, controller, wiring and other tests are unchanged.
+
+### Change summary for step 2 minimize_loop (round 2)
+
+Staged paths:
+
+- `M companion/main_windows.go`
+- `M companion/minimize_hook_windows.go`
+- `A companion/minimize_hook_windows_test.go`
+- `M companion/minimize_windows.go`
+- `M companion/minimize_windows_test.go`
+- `M docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md`
+
+Root `a.commit` groups (formatted by `wac`, `commit-plan-check` ready):
+
+1. `fix(minimize_loop): drive minimize from IsIconic`: the five `companion/`
+   files. Code and tests stay together, because the old tests call the
+   deleted `minimizeEventTransition` and would not build alone.
+2. `docs(minimize_loop): record step 2 validation`: the validation plan.
+
+### Writer response for step 2 minimize_loop (round 2)
+
+Writer response:
+
+Round 1 raised one finding: after the latch, a shown-to-iconic edge with an
+age bound over 500 ms reports `unknown-age` instead of `latched`. The writer
+accepts the test gap and disagrees with the reordering.
+
+- **Disagreement on the precedence**: the skip-reason order stays
+  `unknown-age`, then `latched`. The design's Target Behavior pseudo-code
+  lists `bound > lateness bound -> skip "unknown-age"` before
+  `cap closed or latched -> skip "cap" or "latched"`. Plan Step 3, item 3,
+  fixes the precedence explicitly: "`unknown-age` when the bound exceeds
+  500 ms; else `latched`; else `cap`", "which follows the design's
+  target-behavior order". Its `TestMinimizeCapStaysClosedDuringAContinuingStream`
+  feeds a latched model the same stream and expects old edges to report
+  `unknown-age`. Moving the latch first would contradict that settled plan
+  and the Step 3 test. The design prose "every shown-to-iconic edge is skipped
+  with reason `latched`, whenever the delayed own call applies" describes an
+  own call that applies late while the host keeps ticking, so its edge is
+  prompt and does report `latched` (covered by
+  `TestMinimizeControllerDeferredReplayLatches`). Either reason skips the
+  edge, so no interception differs.
+- **Test gap accepted**: `TestMinimizeModelLatchedSkipsEveryLaterEdge` now
+  also feeds a post-latch edge with a 501 ms bound and asserts `unknown-age`
+  with the latch kept, which pins the precedence. The `shownToIconic` doc
+  comment now states the order.
+- **Reviewer validation metadata reversed**: the Step 2 verdict is back to the
+  exact Yes sentence and the reviewer's missing-work section is removed,
+  because the writer keeps the plan's precedence. The analysis paragraph
+  records the round 1 finding and this decision. The reviewer's clearer
+  wording of the skip order in "What was implemented for Step 2" ("even after
+  the latch") is kept, since it describes the code accurately.
+- **Commit plan**: groups and subjects are unchanged. Group 2's "fully
+  implemented" body is accurate again under the writer's decision, so
+  `a.commit` needs no amendment; `commit-plan-check` is still ready.
+
+### Reviewer focus for step 2 minimize_loop (round 2)
+
+Check the exact plan step, staged implementation, test evidence, repaired path inventory, and a.commit accuracy.
+
+<!-- review-entry-id: request-step-2-round-2 -->
+
+## Round 2 by reviewer - Step 2
+
+- Recorded: 2026-09-25T19:16:46+02:00
+- Exchange: code/code/v0.0.24/minimize_loop
+- Umbrella: none
+- Reviewed document: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+- Requestor LLM nature: claude
+- Reviewer LLM nature: codex
+- Implementation step: 2
+- Outcome: answer
+
+### Assessed index identity for step 2 minimize_loop (exchange 1) (round 2)
+
+Baseline index tree: 5b3def582558e149983cafc33698f66ba8357dba
+
+Assessed index tree: 6eeaabc8ce68987844dee66c5d7b92d7a707f19c
+
+### Implementation check for step 2 minimize_loop (exchange 1) (round 2)
+
+Result:
+
+Yes. Step 2 is fully implemented. The pure minimizeModel and Win32 adapter satisfy the Step 2 plan, including phase transitions, age bounds, latch behavior, one composition before replay, logging, and the planned test migration. The prior round's requested post-latch skip reason was incorrect: plan Step 3 item 3 and the design target-behavior sequence give unknown-age precedence over latched. A new test asserts that a post-latch edge over 500 ms skips as unknown-age while the latch remains set. No current implementation gap remains.
+
+Validation plan effects:
+
+The exact Step 2 validation row remains Yes and records the new post-latch age test. I corrected one expectation bullet in that row so prompt post-latch edges say latched and edges over the 500 ms age bound say unknown-age. No other validation-plan step or umbrella row changed.
+
+### Pre-repair mandatory checks and coverage for step 2 minimize_loop (exchange 1) (round 2)
+
+Requestor evidence reports 51 Go PASS lines, clean gofmt and go vet, a passing targeted Minimize run, companion script exit 0, npm test 8 pass, six expected completion-grep results, and the pure-model coverage gate passing. ghog day exited 9 as the documented non-pytest project default; the named companion and npm validations passed. I assessed the tests and coverage statically and did not rerun requestor-side validation commands.
+
+### Resolved validation set and sources for step 2 minimize_loop (exchange 1) (round 2)
+
+The request embeds 11 resolved commands: project-default ghog day; companion test script; npm test; Go format/vet; six Step 2 completion greps; and the pure-model coverage gate. They match the current plan's resolved set and round 1. No command was added or removed.
+
+### Resolver drift and direction for step 2 minimize_loop (exchange 1) (round 2)
+
+None. The embedded resolved validation set matches the current project default and plan commands.
+
+### Repository state around validation for step 2 minimize_loop (exchange 1) (round 2)
+
+Request-time and pre-assessment index tree: 5b3def582558e149983cafc33698f66ba8357dba. After the single attributable validation-row wording correction, index tree: 6eeaabc8ce68987844dee66c5d7b92d7a707f19c. Validation-state comparison flags only that staged review-metadata path and the resulting index tree; these are the intended reviewer edit, not a validation side effect. No ignored or untracked validation artifacts appeared in the compared six-path set. No umbrella applies; its digest remained inapplicable. The unstaged review transcript is protocol state.
+
+### Repair inventory for step 2 minimize_loop (exchange 1) (round 2)
+
+Repairs made:
+
+- Review metadata only: staged a wording correction in docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md to state the plan's unknown-age-before-latched precedence. The pre-repair blob was recorded, and the reviewer patch was proven attributable before staging. No substantive implementation repair was made.
+
+Paths staged:
+
+- Six staged paths: companion/main_windows.go; companion/minimize_hook_windows.go; companion/minimize_hook_windows_test.go; companion/minimize_windows.go; companion/minimize_windows_test.go; docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md. All belong to Step 2 implementation or its exact validation row. No pre-existing unstaged writer work was staged.
+
+### Commit plan assessment for step 2 minimize_loop (exchange 1) (round 2)
+
+Independent commit-plan-check returned state valid, ready true, zero diagnostics, and exactly the six staged paths. Group 1 is fix(minimize_loop): drive minimize from IsIconic for the five companion paths. Group 2 is docs(minimize_loop): record step 2 validation for the validation plan. Membership, order, scope, and conventional subjects are accurate.
+
+### Findings and boundaries for step 2 minimize_loop (exchange 1) (round 2)
+
+Unresolved findings: None.
+
+Boundary-crossing work: None.
+
+### Writer instructions for step 2 minimize_loop (exchange 1) (round 2)
+
+No Step 2 changes required. The commit-ready recommendation is advisory; proceed through the human commit gate if selected. The reviewer did not commit.
+
+### Decision rationale for step 2 minimize_loop (exchange 1) (round 2)
+
+Recommend commit-ready. Exact identity and request-time tree match; Step 2 is complete; requestor validation and static coverage assessment support readiness; the sole reviewer edit is attributable Step 2 review metadata; no current or carried findings remain; and the independent commit-plan check is ready. No substantive repair occurred this round.
+
+### Final reviewer decision for step 2 minimize_loop (exchange 1) (round 2)
+
+Decision: commit-ready (advisory). The evidence floor is complete, but this recommendation does not authorize a commit; authority remains at the durable human gate.
+
+<!-- review-entry-id: answer-step-2-round-2 -->
+
+## Round 2 by human - Step 2 - human-confirmation
+
+- Recorded: 2026-09-25T19:27:16+02:00
+- Exchange: code/code/v0.0.24/minimize_loop
+- Umbrella: none
+- Reviewed document: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+- Requestor LLM nature: claude
+- Reviewer LLM nature: codex
+- Implementation step: 2
+- Outcome: human-confirmation
+
+Human choice: Commit
+Outcome: continue-owning-workflow
+
+<!-- review-entry-id: human-confirmation-round-2 -->
