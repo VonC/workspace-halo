@@ -160,6 +160,14 @@ timing constants in `wiki/reference/display-triggers.md`: the lateness bound
 (500 ms is an example), the cap count and its time window (2 interceptions
 within 2 s is an example), and the quiet period that resets it.
 
+## File-based IO cost clarification for minimize_loop
+
+The fix must not add file-based IO to the host's tick or event path. Its
+state (minimize phase, interception counts, any latch) stays in memory for the
+host session, with no file to load at start and nothing persisted. The only
+file IO allowed is appending decision lines to the existing `native-host.log`,
+once per decision or event, never once per quiet tick.
+
 ## Related work outside minimize_loop
 
 After the unplug, no host logged `display topology=internal`. In child mode,

@@ -374,6 +374,16 @@ unknown age, uncertain own calls, and capped or latched minimizes are let
 through without the halo, and why. `CHANGELOG.md`
 records the fix under 0.0.24.
 
+## File-based IO cost clarification for v0.0.24 minimize_loop
+
+Every decision reads `IsIconic` and `GetTickCount64`, in-process Win32 calls,
+and updates a fixed-size in-memory model (phase, last reading, `lastShownAt`,
+cap history of at most 2 ticks, latch). Host start seeds that model from one
+reading: there is no file or metadata to load. Nothing is persisted, and the
+latch ends with the host process. The only file IO is appending lines to
+`native-host.log` for each edge, own call, WinEvent, Unsettled change and cap
+change; a tick that finds no edge writes nothing.
+
 ---
 
 ## Acceptance Cases for v0.0.24 minimize_loop
