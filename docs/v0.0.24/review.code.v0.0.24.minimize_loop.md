@@ -1029,3 +1029,296 @@ Human choice: Commit
 Outcome: continue-owning-workflow
 
 <!-- review-entry-id: human-confirmation-round-2 -->
+
+## Round 1 by requestor - Step 3
+
+- Recorded: 2026-09-25T19:54:59+02:00
+- Exchange: code/code/v0.0.24/minimize_loop
+- Umbrella: none
+- Reviewed document: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+- Requestor LLM nature: claude
+- Reviewer LLM nature: unrecorded
+- Implementation step: 3
+- Outcome: request
+
+### Review identity for step 3 minimize_loop (round 1)
+
+Umbrella draft: none
+Implementation plan: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+Implementation step: 3
+Review round: 1
+
+### Code review evidence for step 3 minimize_loop (round 1)
+
+request_index_tree: f131513f8b39aec1f7ab550532c1b1a54cb6cd54
+resolved_validation_set:
+
+- ghog day (sources: project)
+- powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test-companion.ps1 (sources: plan)
+- npm test (sources: plan)
+- Push-Location companion; gofmt -l .; go vet ./...; Pop-Location (sources: plan)
+- git grep -nE 'minimizeCap(Count|WindowMS|QuietMS) +=' -- companion (sources: plan)
+- git grep -nE 'interception (suspended|resumed)' -- companion (sources: plan)
+- pure-model coverage gate over a.cover.minimize.out (plan command templates) (sources: plan)
+
+commit_plan_result:
+
+```text
+state: valid
+ready: true
+group 1: fix(minimize_loop): cap interceptions per window
+group 1 path: companion/minimize_windows.go
+group 1 path: companion/minimize_windows_test.go
+group 1 path: companion/minimize_cap_windows_test.go
+group 1 path: companion/minimize_fuzz_windows_test.go
+group 2: fix(minimize_loop): log cap trip and resume
+group 2 path: companion/minimize_hook_windows.go
+group 2 path: companion/minimize_hook_windows_test.go
+group 3: docs(minimize_loop): record step 3 validation
+group 3 path: docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md
+staged path: companion/minimize_cap_windows_test.go
+staged path: companion/minimize_fuzz_windows_test.go
+staged path: companion/minimize_hook_windows.go
+staged path: companion/minimize_hook_windows_test.go
+staged path: companion/minimize_windows.go
+staged path: companion/minimize_windows_test.go
+staged path: docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md
+```
+
+### Requestor assessment for step 3 minimize_loop (round 1)
+
+Step 3 is fully implemented; the implementation check wrote the exact Yes
+sentence into the validation plan.
+
+- **Tests**: `go test -v` gives 57 top-level `--- PASS` lines (51 after
+  Step 2, plus 6 new: five `TestMinimizeCap...` tests and
+  `TestMinimizeControllerLogsCapTripAndResume`), and
+  `FuzzMinimizeModelObservations` runs its 11 `f.Add` seeds (9 before, plus
+  2 cap seeds) under plain `go test`. As extra evidence, a 30 s
+  `go test -fuzz` session ran on a scratch copy of `companion` outside the
+  repository (232444 executions, no failing input), so no
+  `testdata/fuzz` file was written. A mutation that disables the
+  `closed(now)` case fails five of the new tests and the fuzz seeds.
+- **Static checks**: `gofmt -l` prints nothing and `go vet ./...` exits 0.
+  The first completion grep finds the three constants
+  (`minimize_windows.go:109-111`); the second finds both log formats in
+  `minimize_hook_windows.go` (lines 74 and 79) and their test assertions.
+- **Gate**: `ghog day` ends at `exit=9` ("not a pytest project"),
+  `scripts\test-companion.ps1` prints `ok  workspace-halo/companion` and exits
+  0, and `npm test` exits 0 (8 pass).
+- **Coverage**: the pure-model coverage gate over `a.cover.minimize.out`
+  passes (60 blocks of `minimize_windows.go`, none at zero; no
+  `minimize_cap_windows.go` exists because no model split was needed). The
+  controller's `observe`, with its two new log branches, stays at 100%; the
+  five Win32 adapter functions stay at 0%, evidence-only under plan Q08.
+- **Architecture**: `minimizeCap` sits in the pure model file, which still
+  has no import and no `proc*` reference. The controller only reads the
+  `capTripped` and `capResumed` flags and logs. The three Step 2 carry-overs
+  (controller and adapter in one file, global `activeApp`, 1846-line
+  `main_windows.go`) are untouched.
+- **Performance**: the cap is a fixed two-slot array plus three scalars; each
+  observation adds one `maybeResume` check and, on a shown-to-iconic edge, at
+  most one `closed` check and one record. No new Win32 call, no allocation.
+  The two new log lines are written only on a trip or a resume.
+- **Feature integrity**: one minimize, or minimize-restore-minimize within
+  2 s, still gets both interceptions and halos; every Step 2 line is still
+  written.
+- **Line budgets and split**: adding the cap tests took
+  `minimize_windows_test.go` to 622 lines, past the 550 threshold, so the
+  plan's split guidance was applied: the fuzz target moved to new
+  `minimize_fuzz_windows_test.go` (170 lines) and the cap tests to new
+  `minimize_cap_windows_test.go` (165 lines); `minimize_windows_test.go` is
+  back to 307. `minimize_windows.go` is 361 (advisory about 330),
+  `minimize_hook_windows.go` 265 (about 240), `minimize_hook_windows_test.go`
+  323 (about 260); all below 550. `main_windows.go` is unchanged at 1846.
+- **Interpretation choices for the reviewer to judge**:
+  - The plan calls the `intercepts` array a ring; it is kept oldest first and
+    shifted by one on each record, the same fixed two-slot window, so
+    `closed` reads the oldest tick at index 0.
+  - The 2000 ms window is exclusive: a third edge exactly 2000 ms after the
+    first is intercepted (`now - oldest < minimizeCapWindowMS` closes the
+    cap). `TestMinimizeCapAllowsTwoInterceptionsWithinTheWindow` pins it, and
+    the fuzz trace checks "no three intercepts within 2000 ms" with the same
+    strict bound.
+  - `shownToIconic` records attempts after its Unsettled case, not before:
+    Unsettled only follows an interception, which needs an open cap, so it
+    never coexists with a suspension. The doc comment states this, and the
+    fuzz trace checks the `lastAttemptAt` property on every observation.
+  - A closed cap trips only when an edge reaches the cap check; a
+    `unknown-age` edge while two intercepts are in the window does not trip
+    it (design: the cap applies to an edge that "would be intercepted"),
+    tested in `TestMinimizeCapTripsOnTheThirdEdgeWithinTwoSeconds`.
+
+### Implementation report for step 3 minimize_loop (round 1)
+
+Step 3 changes on top of the Step 2 observation model:
+
+- `companion/minimize_windows.go`: adds `minimizeCapCount = 2`,
+  `minimizeCapWindowMS = 2000`, `minimizeCapQuietMS = 5000` and
+  `minimizeReasonCap = "cap"`. Adds the value type `minimizeCap`
+  (`intercepts [minimizeCapCount]uint64`, `filled`, `suspended`,
+  `lastAttemptAt`) with `closed(now)`, `recordIntercept(now)`,
+  `recordAttempt(now) (minimizeCap, tripped bool)` and
+  `maybeResume(now) (minimizeCap, resumed bool)`, as field `cap` of
+  `minimizeModel`. `minimizeDecision` gains `capTripped` and `capResumed`.
+  `observe` calls `maybeResume` right after the Unsettled resolution, on every
+  observation. `shownToIconic(decision, now)` keeps its Unsettled case first,
+  then records every external edge as an attempt while suspended, then
+  cancels a Priming replay (never counted), then in Shown skips with
+  `unknown-age`, `latched` or `cap` (a first closed cap trips here), or
+  intercepts and records the tick at the decision. The file header explains
+  the cap.
+- `companion/minimize_hook_windows.go`: `minimizeController.observe` logs
+  `minimize interception resumed after 5000ms quiet` before the edge line on
+  `capResumed`, and `minimize interception suspended: 2 intercepts in 2000ms`
+  after it on `capTripped`, both formatted from the constants.
+- `companion/minimize_cap_windows_test.go` (new): helpers
+  `minimizeEdgeAfter` and `trippedMinimizeModel`, and the five planned cap
+  tests: two interceptions pass (and the exclusive window), trip once (and a
+  late third edge keeps `unknown-age` without tripping), a 20-edge stream on a
+  tripped and on a latched model keeps the cap closed with `lastAttemptAt` on
+  every edge, the T + 4999 / T + 5000 / T + 9998 / T + 9999 resume
+  boundaries, and Priming cancellations not counted.
+- `companion/minimize_fuzz_windows_test.go` (new): the Step 2
+  `FuzzMinimizeModelObservations`, its decoder and checks, moved verbatim out
+  of `minimize_windows_test.go`, plus two cap seeds and
+  `minimizeFuzzCapTrace`, which checks the four planned cap properties on
+  every observation.
+- `companion/minimize_windows_test.go`: loses the fuzz target (moved); keeps
+  the Step 2 model tests and `primedMinimizeModel`, which the cap tests reuse;
+  header updated for the split.
+- `companion/minimize_hook_windows_test.go`: adds the `externalRestore`
+  fixture helper and `TestMinimizeControllerLogsCapTripAndResume`.
+- `docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md`: fills the Step 3
+  sections with the Yes verdict and evidence, and updates the opening theme
+  sentence (the document-level line stays `No`, Step 4 is pending).
+
+### Change summary for step 3 minimize_loop (round 1)
+
+Staged paths:
+
+- `A companion/minimize_cap_windows_test.go`
+- `A companion/minimize_fuzz_windows_test.go`
+- `M companion/minimize_hook_windows.go`
+- `M companion/minimize_hook_windows_test.go`
+- `M companion/minimize_windows.go`
+- `M companion/minimize_windows_test.go`
+- `M docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md`
+
+Root `a.commit` groups (formatted by `wac`, `commit-plan-check` ready):
+
+1. `fix(minimize_loop): cap interceptions per window`: `minimize_windows.go`
+   and the three model test files. It builds alone, because the Step 2
+   controller does not read the new decision flags yet.
+2. `fix(minimize_loop): log cap trip and resume`: `minimize_hook_windows.go`
+   and `minimize_hook_windows_test.go`.
+3. `docs(minimize_loop): record step 3 validation`: the validation plan.
+
+### Writer response for step 3 minimize_loop (round 1)
+
+Writer response:
+
+First round of the Step 3 review: no earlier feedback to accept or dispute.
+The interpretation choices (shifted two-slot window instead of a ring index,
+exclusive 2000 ms window, attempt recording after the Unsettled case, trip
+only at the cap check) and the test file split are listed in the assessment
+for the reviewer to judge.
+
+### Reviewer focus for step 3 minimize_loop (round 1)
+
+Check the exact plan step, staged implementation, test evidence, repaired path inventory, and a.commit accuracy.
+
+<!-- review-entry-id: request-step-3-round-1 -->
+
+## Round 1 by reviewer - Step 3
+
+- Recorded: 2026-09-25T20:08:28+02:00
+- Exchange: code/code/v0.0.24/minimize_loop
+- Umbrella: none
+- Reviewed document: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+- Requestor LLM nature: claude
+- Reviewer LLM nature: codex
+- Implementation step: 3
+- Outcome: answer
+
+### Assessed index identity for step 3 minimize_loop (exchange 1) (round 1)
+
+Baseline index tree: f131513f8b39aec1f7ab550532c1b1a54cb6cd54
+
+Assessed index tree: f131513f8b39aec1f7ab550532c1b1a54cb6cd54
+
+### Implementation check for step 3 minimize_loop (exchange 1) (round 1)
+
+Result:
+
+Yes. Step 3 has been fully implemented. The staged pure minimizeCap limits a window to two interceptions in a rolling 2000 ms window, trips on the next eligible prompt edge, records every shown-to-iconic attempt during suspension, and clears history after 5000 ms without such an edge. The observation model retains the specified unknown-age, latched, cap precedence; Priming cancellations do not count. The controller emits the trip and resume lines. Five cap tests, the extended fuzz target, and the controller log test cover the planned behavior. The fixed two-slot oldest-first array is equivalent to the planned ring for a two-entry window; the exclusive 2000 ms boundary is a consistent half-open time window. The test split follows the plan and all touched files remain below the line ceiling. No Step 3 implementation gap remains.
+
+Validation plan effects:
+
+The exact Step 3 validation rows already begin with Yes. Step 3 has been fully implemented. They accurately record the cap behavior, test split, evidence, and the Step 4 pending state. No validation-plan edit was needed; no umbrella applies.
+
+### Pre-repair mandatory checks and coverage for step 3 minimize_loop (exchange 1) (round 1)
+
+Requestor evidence reports 57 passing Go tests plus 11 fuzz seeds under ordinary go test; passing companion and npm suites; clean gofmt and go vet; both expected completion greps; and the pure-model coverage gate with no zero-count block. The documented ghog day exit 9 is the project default for a non-pytest repository. The model tests exercise the new cap methods and decision paths; the five Win32 adapter functions are outside the pure-model gate under plan Q08. I assessed this evidence and test coverage statically and did not rerun requestor-side validation commands.
+
+### Resolved validation set and sources for step 3 minimize_loop (exchange 1) (round 1)
+
+The request embeds seven resolved commands: project-default ghog day, companion test script, npm test, Go format/vet, two Step 3 completion greps, and the pure-model coverage gate. The commands and project or plan sources match the current Step 3 plan checklist.
+
+### Resolver drift and direction for step 3 minimize_loop (exchange 1) (round 1)
+
+None. The embedded command set matches the current project default and exact Step 3 plan.
+
+### Repository state around validation for step 3 minimize_loop (exchange 1) (round 1)
+
+The request-time, baseline, and assessed index tree all equal f131513f8b39aec1f7ab550532c1b1a54cb6cd54. The ordered seven-path validation-state comparison is acceptable with no tracked, untracked, or ignored changes. The umbrella digest remained inapplicable. The unstaged review transcript is protocol state and was not staged.
+
+### Repair inventory for step 3 minimize_loop (exchange 1) (round 1)
+
+Repairs made:
+
+- None. No implementation, test, validation-plan, or commit-plan file was edited by the reviewer.
+
+Paths staged:
+
+- Seven staged Step 3 paths: companion/minimize_cap_windows_test.go; companion/minimize_fuzz_windows_test.go; companion/minimize_hook_windows.go; companion/minimize_hook_windows_test.go; companion/minimize_windows.go; companion/minimize_windows_test.go; docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md. No pre-existing unstaged work was staged.
+
+### Commit plan assessment for step 3 minimize_loop (exchange 1) (round 1)
+
+The independent commit-plan-check returned state valid, ready true, and zero diagnostics. Its three ordered groups are the pure cap model and tests, controller cap logging and test, then Step 3 validation documentation. All seven staged paths are covered once, and grouping, order, scope, and conventional subjects remain accurate.
+
+### Findings and boundaries for step 3 minimize_loop (exchange 1) (round 1)
+
+Unresolved findings: None.
+
+Boundary-crossing work: None.
+
+### Writer instructions for step 3 minimize_loop (exchange 1) (round 1)
+
+No Step 3 changes required. The commit-ready recommendation is advisory; proceed through the human commit gate if selected. The reviewer did not commit.
+
+### Decision rationale for step 3 minimize_loop (exchange 1) (round 1)
+
+Recommend commit-ready. The live exchange and request-time index match; Step 3 is complete; requestor validation and static coverage assessment support readiness; all staged paths belong to the step and remained unchanged; no unresolved findings or boundary changes exist; and the independent commit-plan check is ready. No substantive repair occurred this round.
+
+### Final reviewer decision for step 3 minimize_loop (exchange 1) (round 1)
+
+Decision: commit-ready (advisory). The evidence floor is complete, but this recommendation does not authorize a commit; authority remains at the durable human gate.
+
+<!-- review-entry-id: answer-step-3-round-1 -->
+
+## Round 1 by human - Step 3 - human-confirmation
+
+- Recorded: 2026-09-25T21:41:19+02:00
+- Exchange: code/code/v0.0.24/minimize_loop
+- Umbrella: none
+- Reviewed document: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+- Requestor LLM nature: claude
+- Reviewer LLM nature: codex
+- Implementation step: 3
+- Outcome: human-confirmation
+
+Human choice: Commit
+Outcome: continue-owning-workflow
+
+<!-- review-entry-id: human-confirmation-round-1 -->
