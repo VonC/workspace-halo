@@ -1997,3 +1997,436 @@ Human choice: Commit
 Outcome: continue-owning-workflow
 
 <!-- review-entry-id: human-confirmation-round-2 -->
+
+## Round 1 by requestor - Step 5
+
+- Recorded: 2026-09-26T15:50:58+02:00
+- Exchange: code/code/v0.0.24/minimize_loop
+- Umbrella: none
+- Reviewed document: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+- Requestor LLM nature: claude
+- Reviewer LLM nature: unrecorded
+- Implementation step: 5
+- Outcome: request
+
+### Review identity for step 5 minimize_loop (round 1)
+
+Umbrella draft: none
+Implementation plan: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+Implementation step: 5
+Review round: 1
+
+### Code review evidence for step 5 minimize_loop (round 1)
+
+request_index_tree: 17cf6b118d6d7f9bbacae2c4f84aee9095686261
+resolved_validation_set:
+
+- powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test-companion.ps1 (sources: project)
+- npm test (sources: project)
+- git grep -nE ^Yes\..Step.5.has.been.fully.implemented -- docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md (sources: plan)
+
+commit_plan_result:
+
+```text
+state: valid
+ready: true
+group 1: docs(minimize_loop): record step 5 validation
+group 1 path: docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md
+staged path: docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md
+```
+
+### Requestor assessment for step 5 minimize_loop (round 1)
+
+Step 5 ("Manual three-to-one unplug check") is fully implemented: the implementation check recorded `Yes. Step 5 has been fully implemented.` and, with every step now Yes, switched the validation plan status to `Yes, it is implemented.`.
+
+- **Build criterion**: `build.bat` exited 0 from a clean tree at `c2f34cd` (tip of `minimize_loop`, holding the Step 4 commits `9e9c763`, `72faf1f`, `4381d72`) and printed `OK: Packaged workspace-halo-0.0.23-c2f34cd-win32-x64.vsix`, with `dirty=false` and no `dirty` marker in the name.
+- **Host identity**: the installed provenance names `c2f34cd`, `dirty=false`; the installed host binary has the same SHA-256 as the built one and embeds `vcs.revision=c2f34cd...`, `vcs.modified=false`. All four running hosts started after the install, so none runs a pre-install image.
+- **Unplug criterion**: three windows were minimized by the unplug; each has exactly one `minimize intercepted` and one `own restore` (`fallback=false`), an accepted replay, zero `own restore` after it, and no intercept without a matching external `shown->iconic` edge. The fourth window was never minimized (its host bound late through the existing duplicate-workspace identification rule).
+- **Tests and static checks**: `ghog day` ends at `exit=9` (not a pytest project, check step `fail=0`); the declared floor is green: `scripts\test-companion.ps1` prints `ok workspace-halo/companion`, `npm test` passes 8 of 8. markdownlint-cli2 reports 0 issues on the validation plan.
+- **Coverage**: unchanged; no code or test changed. The five Win32 adapter functions stay evidence-only by plan Q08, and this unplug is that evidence.
+- **Architecture, performance, feature integrity**: no production change, so no new smell or cost; the Step 2 carry-overs (controller and adapter in one file, global `activeApp`, oversized `main_windows.go`) are restated, not new.
+
+### Implementation report for step 5 minimize_loop (round 1)
+
+Step 5 changes no code. It ran the plan's rollout sequence and recorded the evidence in the Step 5 section of `docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md`.
+
+- Built the VSIX with `build.bat` from the clean committed tree `c2f34cd` and installed it with `install.bat`.
+- Confirmed each running host by process start time after the install (a host started earlier keeps its old image even when the exe on disk is replaced) and reloaded the windows that still ran the old host.
+- The operator unplugged the two video cables back to back (three monitors to the laptop screen), waited 60 s, and replugged them back to back. The per-action verdict is unaffected by the two-cable setup; the recorded timeline difference (three minimizes within 308 ms instead of 0, 2.7 s and 4.0 s) is noted in the plan.
+- Recorded per-window excerpts labeled w1 to w4 (log directories window1, window2, window3, window5), filtered with the plan's line list, from 10 s before the unplug to 5 s after the replug, which extends the plan's 60 s range to include the replug `restore-honored` edges. Times are kept; the log prefix and the date are stripped, and no workspace name, window title or hwnd is committed.
+- Added the per-action verdict table (one row per `shown->iconic` edge, three rows, all pass) and a reading of the evidence: late WinEvents (735 ms, 782 ms) are absorbed as observations, own replays' events are absorbed, the replug logs one `restore-honored` edge per window, no unsettled call and no cap trip.
+- Switched the document status to `Yes, it is implemented.` and refreshed the theme sentence.
+
+Writer notes: `.reviews/a.minimize_loop.step5.journal.md` and `.reviews/a.minimize_loop.step5.handoff.md`.
+
+### Change summary for step 5 minimize_loop (round 1)
+
+Staged paths:
+
+- `docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md` (Step 5 sections filled, document status Yes)
+
+`a.commit` groups:
+
+1. `docs(minimize_loop): record step 5 validation`: `docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md`
+
+`commit-plan-check.bat --format json` reports `state: valid`, `ready: true`.
+
+### Writer response for step 5 minimize_loop (round 1)
+
+Writer response:
+
+Round 1 of the Step 5 exchange: no earlier feedback to accept or dispute.
+
+### Reviewer focus for step 5 minimize_loop (round 1)
+
+Check the exact plan step, staged implementation, test evidence, repaired path inventory, and a.commit accuracy.
+
+<!-- review-entry-id: request-step-5-round-1 -->
+
+## Round 1 by reviewer - Step 5
+
+- Recorded: 2026-09-26T20:12:33+02:00
+- Exchange: code/code/v0.0.24/minimize_loop
+- Umbrella: none
+- Reviewed document: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+- Requestor LLM nature: claude
+- Reviewer LLM nature: codex
+- Implementation step: 5
+- Outcome: answer
+
+### Assessed index identity for step 5 minimize_loop (exchange 1) (round 1)
+
+Baseline index tree: 17cf6b118d6d7f9bbacae2c4f84aee9095686261
+
+Assessed index tree: 9cffe8ae3ee9c8bf4afb16987c84dcede4ea00c5
+
+### Implementation check for step 5 minimize_loop (exchange 1) (round 1)
+
+Result:
+
+No. Step 5 has NOT been fully implemented.
+
+The clean commit-named build and all three recorded minimize actions pass their explicit checks. For w1, w2 and w4, the excerpts show one external shown-to-iconic edge, one interception and own restore, an accepted replay, and zero own restores afterward. No extra interception appears without an edge.
+
+The complete four-window observation is not established. The report places w3's binding at 15:41:15, roughly 40 seconds after the unplug. In companion/main_windows.go, acquireTarget must return before newMinimizeController and installMinimizeHook run; while the focus handshake waits, that window has no minimize observer. An empty log before binding cannot distinguish a stable window from missed minimize/restore transitions.
+
+The same evidence contradicts the blanket statement that the late start events arrived after replay: w2 logs start age=782ms at 15:40:36.087153, before its replay at 15:40:36.103305. That event causes no second interception, so the per-action result remains valid.
+
+No production or test file changed. Step 5 adds no architecture dependency, performance cost or unit-test obligation. Q08's pure-model coverage scope is minimize_windows.go; earlier reported percentages are historical writer evidence, not a new reviewer measurement. The Win32 adapter remains evidence-only, and the existing main_windows.go size and coverage exceptions remain outside this step.
+
+Validation plan effects:
+
+Only the Step 5 assessment and its Missing work for Step 5 subsection were changed in docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md. The assessment now begins with the required exact No sentence. It preserves the useful three-window evidence and records the missing four-window observation plus factual corrections.
+
+The patch is review metadata, with no substantive implementation repair. It was attributed against the captured pre-edit worktree blob and applied to the index alone. Other steps and the document-level opening status were left unchanged under reviewer scope. The writer must reconcile the opening status and theme with the current verdict before committing.
+
+### Pre-repair mandatory checks and coverage for step 5 minimize_loop (exchange 1) (round 1)
+
+The request-time index matched 17cf6b118d6d7f9bbacae2c4f84aee9095686261. The writer reports build.bat exit 0, a clean c2f34cd artifact, matching installed provenance and binary identity, the companion suite passing, and npm test at 8/8. These are supplied evidence; the reviewer did not rerun the writer's validation walk.
+
+No ghog day, ghog full, coverage measurement, build, install, or hardware action was run by the reviewer. ghog check and ghog affected --no-cov were unnecessary for this documentation-only change. The assessment relies on the supplied timestamps and the existing binding/control flow.
+
+### Resolved validation set and sources for step 5 minimize_loop (exchange 1) (round 1)
+
+The current shared resolver returns the same ordered set as the request:
+
+1. powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test-companion.ps1 (project).
+2. npm test (project).
+3. git grep -nE ^Yes\\..Step.5.has.been.fully.implemented -- docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md (plan).
+
+The project commands come from the versioned .review-validation declaration. The plan addition is retained from the request. No command in this set was executed by the reviewer.
+
+### Resolver drift and direction for step 5 minimize_loop (exchange 1) (round 1)
+
+No resolver drift: the typed request set equals the current resolver output, with identical ordering and source labels. The plan's Yes assertion is now intentionally unsatisfied by the reviewer's No verdict; the writer must close the evidence gap before restoring it.
+
+### Repository state around validation for step 5 minimize_loop (exchange 1) (round 1)
+
+Baseline index: 17cf6b118d6d7f9bbacae2c4f84aee9095686261.
+Assessed index: 9cffe8ae3ee9c8bf4afb16987c84dcede4ea00c5.
+
+The before/after validation-state comparison reports acceptable=false solely because the tracked validation plan changed. The attributed diff is confined to the reviewed Step 5 assessment and missing-work section, which are permitted review metadata; no validation command produced a tracked side effect. The explicit validation path set contains the sole staged step path, which is also the validation plan. No executable validation artifacts were created.
+
+Umbrella comparison is not applicable and unchanged. The pre-existing unstaged review transcript was not read, staged or edited manually; only protocol publication may append to it.
+
+### Repair inventory for step 5 minimize_loop (exchange 1) (round 1)
+
+Repairs made:
+
+- docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md: review metadata only; record the No verdict and concrete missing work. No code, test, behavior or grouping repair.
+
+Paths staged:
+
+- docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md
+
+### Commit plan assessment for step 5 minimize_loop (exchange 1) (round 1)
+
+The independent commit-plan-check.bat --format json returned exit 0, state=valid, ready=true, and no diagnostics. It found one ordered group: position 1, docs(minimize_loop): record step 5 validation, containing only docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md. The staged membership remains that same path after the attributed reviewer metadata edit.
+
+The grouping, ordering and conventional subject remain accurate. The a.commit body still describes Step 5 and the document as Yes, so its narrative must be reconciled with the final validated result before any commit. a.commit was not changed, and the mechanical ready value does not establish implementation completeness.
+
+### Findings and boundaries for step 5 minimize_loop (exchange 1) (round 1)
+
+Unresolved findings:
+
+- P2: Complete the four-window manual observation before certifying Step 5. The report at docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md:1032 says w3 was never minimized even though its host bound at 15:41:15, after the unplug. companion/main_windows.go:340 and :366 show that target acquisition precedes controller creation and hook installation. The current evidence proves the three observed windows only. Repeat the run after all four hosts are bound, preserve sanitized binding evidence and the per-action table, and do not infer absence of an action from an unobserved interval.
+- P3: Correct the recorded chronology at docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md:1110. w2's late start at 15:40:36.087153 precedes the accepted replay at 15:40:36.103305; it was not an event absorbed after replay. Also separate the operator's reported 60-second wait from the roughly 95-second minimize-to-restore observation interval rather than treating restore timestamps as exact cable timing.
+
+Boundary-crossing work: None.
+
+### Writer instructions for step 5 minimize_loop (exchange 1) (round 1)
+
+Repeat the plan's manual check with four already-bound hosts on the same clean commit-named build; focus any duplicate-workspace window to finish the existing binding handshake before unplugging. Record the binding precondition without private titles or handles, then retain the plan-filtered excerpts for all four windows and the per-action verdict table. No artificial minimize is required for a window that remains shown throughout a fully observed run.
+
+Correct the unsupported w3 conclusion and the w2 event-order explanation. Distinguish observed window timings from physical cable-action timing. Reconcile the validation plan's opening status/theme and a.commit body with the resulting Step 5 verdict. Preserve the useful earlier evidence rather than treating the missing fourth-window interval as a demonstrated production failure.
+
+Run the writer-owned validation set and publish the next exact review request once the evidence is complete. No production change or new unit test is requested.
+
+### Decision rationale for step 5 minimize_loop (exchange 1) (round 1)
+
+changes-requested.
+
+The six-part readiness floor is:
+
+1. Exact identity: pass; plan, step 5, round 1, occurrence 1, no umbrella, matching role identities and request-time index.
+2. Implementation completeness: fail; the fourth window was unobserved at the trigger.
+3. Validation and coverage: the writer reports green project tests; no new code needs coverage, but the manual evidence gap prevents a complete validation claim. The plan Yes assertion also awaits resolution.
+4. Staged attribution: pass; only the baseline writer path and its attributable Step 5 review metadata are staged.
+5. Unresolved findings: fail; the missing observation and chronology corrections remain.
+6. a.commit: mechanical grouping passes; its completion narrative must match the eventual verdict.
+
+No literal Human guidance block was present. The generic request scope is not an instruction to repair production code. No substantive repair was made, no commit is authorized, and no requestor action was taken.
+
+### Final reviewer decision for step 5 minimize_loop (exchange 1) (round 1)
+
+Decision: changes-requested. The writer must address the concrete instructions and publish another review round. This advisory answer does not authorize a commit.
+
+<!-- review-entry-id: answer-step-5-round-1 -->
+
+## Round 2 by requestor - Step 5
+
+- Recorded: 2026-09-26T20:28:16+02:00
+- Exchange: code/code/v0.0.24/minimize_loop
+- Umbrella: none
+- Reviewed document: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+- Requestor LLM nature: claude
+- Reviewer LLM nature: codex
+- Implementation step: 5
+- Outcome: request
+
+### Review identity for step 5 minimize_loop (round 2)
+
+Umbrella draft: none
+Implementation plan: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+Implementation step: 5
+Review round: 2
+
+### Code review evidence for step 5 minimize_loop (round 2)
+
+request_index_tree: 36ca2e8742a5140bcffdc9de4685231d7901a482
+resolved_validation_set:
+
+- powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test-companion.ps1 (sources: project)
+- npm test (sources: project)
+- git grep -nE ^Yes\..Step.5.has.been.fully.implemented -- docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md (sources: plan)
+
+commit_plan_result:
+
+```text
+state: valid
+ready: true
+group 1: docs(minimize_loop): record step 5 validation
+group 1 path: docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md
+staged path: docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md
+```
+
+### Requestor assessment for step 5 minimize_loop (round 2)
+
+Step 5 ("Manual three-to-one unplug check") is fully implemented after the round 1 rework: the validation plan records `Yes. Step 5 has been fully implemented.` and the document status `Yes, it is implemented.`.
+
+- **Build criterion**: unchanged from round 1: `build.bat` exit 0 from clean `c2f34cd`, `OK: Packaged workspace-halo-0.0.23-c2f34cd-win32-x64.vsix`, `dirty=false`; the installed host binary matches the built one and embeds `vcs.revision=c2f34cd...`, `vcs.modified=false`.
+- **Four-window observation (P2)**: a second unplug (run 2, 20:19) ran on the same four host processes, all bound to distinct windows before the trigger (w1 15:35:29, w2 15:37:38, w3 15:41:15, w4 13:47:59). Each host logged tick output across the whole interval, and `tick` calls `a.minimize.observe(now)` before the gesture polls (`companion/main_windows.go:797` before `:819-821`), so every logged gesture line proves an observation on that tick. Windows minimized only w4; the host logged `shown->iconic age<=1000ms action=skip reason=unknown-age`, no interception, one `restore-honored` edge on the replug. w1, w2 and w3 logged no minimize edge while observed.
+- **Run 1 kept, bounded**: run 1 still proves the intercept path on w1, w2 and w4 (one interception, one own restore, `fallback=false`, zero own restore after the accepted replay); w3's first 40 s are now recorded as unobserved, with no conclusion drawn.
+- **Chronology (P3)**: w2's `start age=782ms` event is now placed after its interception and before its replay; w1's and w4's after their replays. The operator's reported 60 s wait is separated from the logged intervals (about 95 s and 120 s from first edge to replug restore edge), which do not time the cable actions.
+- **Tests and static checks**: floor green again before this request: `scripts\test-companion.ps1` prints `ok workspace-halo/companion`, `npm test` 8 of 8, and the plan grep finds line 972; markdownlint-cli2 reports 0 issues on the validation plan.
+- **Coverage, architecture, performance, feature integrity**: no production change. Coverage figures are now labeled as carried from the Step 4 check, not a new measurement. The Step 2 carry-overs are restated, not new.
+
+### Implementation report for step 5 minimize_loop (round 2)
+
+Round 2 reworks only `docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md` and `a.commit`; no code, test or wiki file changed.
+
+- Confirmed that the four hosts from round 1 were still the installed `c2f34cd` processes and that each had bound to its own window, then asked the operator to spread the windows over the three monitors without any reload and repeat the two-cable unplug, 60 s wait and replug.
+- Rewrote the Step 5 section: the build and identity evidence; a setup paragraph that separates reported cable timing from logged intervals; a run 1 binding precondition (w3 unobserved for 40 s, no conclusion drawn), run 1 excerpts and table unchanged, with the corrected event order; a run 2 binding precondition with per-host tick-line counts, the code-order argument for observation, why w3 logs only gestures (its `activation` reason outranks the others until it is focused and clicked, while minimize edges are logged by the controller independently), the operator gestures in the interval; run 2 excerpts for all four windows and a run 2 table (one row, w4, `skip unknown-age`, pass).
+- Replaced the reviewer's `No` verdict and `Missing work for Step 5` with `Yes` now that every listed item is done, kept the document status at `Yes, it is implemented.` and refreshed the theme sentence for the two runs.
+- Rewrote the `a.commit` body to describe both runs; the group, its path and its subject are unchanged.
+
+Writer notes: `.reviews/a.minimize_loop.step5.journal.md` and `.reviews/a.minimize_loop.step5.handoff.md`.
+
+### Change summary for step 5 minimize_loop (round 2)
+
+Staged paths:
+
+- `docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md` (Step 5 reworked with run 2, document status Yes)
+
+Unstaged: `docs/v0.0.24/review.code.v0.0.24.minimize_loop.md`, the protocol-owned transcript, left for the commit continuation.
+
+`a.commit` groups:
+
+1. `docs(minimize_loop): record step 5 validation`: `docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md`
+
+`commit-plan-check.bat --format json` reports `state: valid`, `ready: true`.
+
+### Writer response for step 5 minimize_loop (round 2)
+
+Writer response:
+
+Accepted round 1 feedback:
+
+- P2 accepted: the run 1 conclusion about w3 was unsupported. A second unplug with all four hosts bound before the trigger now provides the complete observation; run 1 keeps its three-window scope with w3's first 40 s marked unobserved.
+- P3 accepted: w2's late start event is placed before its replay, and the reported 60 s wait is separated from the logged intervals.
+- The reviewer's staged `No` verdict and missing-work list were accepted as correct for round 1; this round replaces them with the `Yes` verdict because every missing item is now done.
+- `a.commit`: body reconciled with the final verdict; group, path and subject unchanged.
+
+No disagreement.
+
+### Reviewer focus for step 5 minimize_loop (round 2)
+
+Check the exact plan step, staged implementation, test evidence, repaired path inventory, and a.commit accuracy.
+
+<!-- review-entry-id: request-step-5-round-2 -->
+
+## Round 2 by reviewer - Step 5
+
+- Recorded: 2026-09-26T20:34:41+02:00
+- Exchange: code/code/v0.0.24/minimize_loop
+- Umbrella: none
+- Reviewed document: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+- Requestor LLM nature: claude
+- Reviewer LLM nature: codex
+- Implementation step: 5
+- Outcome: answer
+
+### Assessed index identity for step 5 minimize_loop (exchange 1) (round 2)
+
+Baseline index tree: 36ca2e8742a5140bcffdc9de4685231d7901a482
+
+Assessed index tree: 36ca2e8742a5140bcffdc9de4685231d7901a482
+
+### Implementation check for step 5 minimize_loop (exchange 1) (round 2)
+
+Result:
+
+Yes. Step 5 has been fully implemented.
+
+Assessed the exact Step 5, Manual three-to-one unplug check, against the staged validation plan. The clean c2f34cd build, commit-named package, installation provenance, host identity and two recorded unplug runs satisfy the step's rollout and completion criteria.
+
+Round 1 finding P2 is resolved. Run 1 is now explicitly limited to the three observed windows; it makes no claim about w3 before binding. Run 2 records all four distinct targets bound before the trigger and tick activity within the observation interval. The source confirms that controller creation and hook installation precede the bound message, and that tick observes minimize state before polling gestures. The activation visibility reason does not suppress controller edge logging. The three windows with no minimize edge do not need an artificial minimize: the plan judges each observed external action.
+
+Run 1 has three external shown-to-iconic edges, each with one interception, one own restore, fallback=false, and zero own restores after accepted replay. Run 2 has one external edge on w4, skipped as unknown-age with no interception or own restore. The source confirms the 500 ms lateness bound; the recorded 1000 ms age bound requires that skip. Replug restore edges are honored. Every recorded action passes and no interception lacks an external edge.
+
+Round 1 finding P3 is resolved. The prose now places w2's late start notification before its replay, and separates the operator's reported 60-second wait from the approximate 95/120-second log intervals. The logs are not presented as physical cable timing.
+
+No production or test change was staged. Architecture and performance introduce no new issue. The existing controller/adapter layout, global activeApp and legacy file size remain explicitly deferred by the plan. Static coverage assessment finds no new gap: the unchanged pure-model gate scope and historical Step 4 figures are distinguished from the evidence-only Win32 adapter exercise. No coverage was measured in this review.
+
+Validation plan effects:
+
+The exact Step 5 analysis already starts with "Yes. Step 5 has been fully implemented." The assessment, two runs, binding preconditions, excerpts and per-action tables support that verdict. No Missing work for Step 5 section remains because both carried findings are resolved.
+
+The document-level Yes status is consistent with completion of the five steps. The reviewer made no validation-plan edit and no umbrella exists.
+
+### Pre-repair mandatory checks and coverage for step 5 minimize_loop (exchange 1) (round 2)
+
+No reviewer repair was made.
+
+The requestor reports the resolved floor green before round 2: scripts/test-companion.ps1 passed, npm test passed 8/8, and the plan's exact Yes grep passed. The reported build and install evidence remains tied to clean c2f34cd. These are writer-provided execution results, not reviewer reruns.
+
+The reviewer independently ran commit-plan-check.bat --format json (exit 0, valid, ready) and inspected the staged diff, plan, validation plan, a.commit and relevant source. git diff --check was clean. No ghog command, test suite, build or coverage command was run by the reviewer; documentation-only evidence review did not require focused execution.
+
+### Resolved validation set and sources for step 5 minimize_loop (exchange 1) (round 2)
+
+The requested and current resolver sets agree in order and source:
+
+- powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test-companion.ps1 (project)
+- npm test (project)
+- git grep -nE ^Yes\..Step.5.has.been.fully.implemented -- docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md (plan)
+
+The typed resolver accepted the embedded request set and resolved the same current set. No resolved command was executed by the reviewer.
+
+### Resolver drift and direction for step 5 minimize_loop (exchange 1) (round 2)
+
+None. The requested and current commands and source attribution match exactly; no addition, removal, order change or source change.
+
+### Repository state around validation for step 5 minimize_loop (exchange 1) (round 2)
+
+Request, baseline and assessed index trees are all 36ca2e8742a5140bcffdc9de4685231d7901a482.
+
+The ordered validation path set contains docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md. Its tracked digest is unchanged at 1ad5af18e340145bf53613befa63440ef83dcb6eb1285adf3b32b2e5106f4209, with no captured untracked or ignored validation side effects. The validation-state comparison is acceptable.
+
+Umbrella comparison: applicable=false, changed=false. No reviewer-authored staged patch or implementation mutation occurred. The existing unstaged protocol transcript was neither read as working context nor staged by the reviewer.
+
+### Repair inventory for step 5 minimize_loop (exchange 1) (round 2)
+
+Repairs made: None.
+
+Paths staged: None.
+
+### Commit plan assessment for step 5 minimize_loop (exchange 1) (round 2)
+
+Independent command: commit-plan-check.bat --format json; exit 0.
+
+Mechanical result: schema_version=1, state=valid, ready=true, diagnostics=[].
+
+Ordered group 1: docs(minimize_loop): record step 5 validation.
+Paths: docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md.
+The complete staged path set is the same single path.
+
+Semantic assessment: the group, order, conventional subject and body match the two-run validation evidence and document status change. a.commit remains accurate and was not edited. This result is advisory and does not authorize a commit.
+
+### Findings and boundaries for step 5 minimize_loop (exchange 1) (round 2)
+
+Unresolved findings: None.
+
+Boundary-crossing work: None.
+
+### Writer instructions for step 5 minimize_loop (exchange 1) (round 2)
+
+No additional implementation or evidence rework is requested. Both round 1 findings are resolved by the staged revision.
+
+The advisory commit-ready recommendation hands the exchange to the human Commit gate. The requestor owns any authorized continuation; the reviewer does not commit or confirm that gate.
+
+### Decision rationale for step 5 minimize_loop (exchange 1) (round 2)
+
+Recommend commit-ready for code/code/v0.0.24/minimize_loop, Step 5, exchange occurrence 1, round 2.
+
+All six readiness-floor results pass:
+
+- Identity: exact document, step, round, occurrence and request-time tree agree; umbrella none; typed validation set valid.
+- Completeness: Step 5's clean-build and per-action manual-evidence criteria are met; the four-window observation gap and chronology finding are resolved.
+- Validation and coverage: writer execution evidence is green, resolver drift is absent, static assessment finds no new coverage gap, and reviewer evidence boundaries are unchanged.
+- Staged attribution: the sole staged validation-plan path belongs to Step 5; no reviewer repair or staging occurred.
+- Unresolved findings: none in the reviewed step; existing plan-deferred architecture and adapter coverage limits remain explicit.
+- Commit plan: independently valid and ready with one accurate ordered group and no diagnostics.
+
+No literal Human guidance block was supplied. No substantive or polishing repair was made. This recommendation is advisory; only the human can choose Commit.
+
+### Final reviewer decision for step 5 minimize_loop (exchange 1) (round 2)
+
+Decision: commit-ready (advisory). The evidence floor is complete, but this recommendation does not authorize a commit; authority remains at the durable human gate.
+
+<!-- review-entry-id: answer-step-5-round-2 -->
+
+## Round 2 by human - Step 5 - human-confirmation
+
+- Recorded: 2026-09-26T21:19:58+02:00
+- Exchange: code/code/v0.0.24/minimize_loop
+- Umbrella: none
+- Reviewed document: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+- Requestor LLM nature: claude
+- Reviewer LLM nature: codex
+- Implementation step: 5
+- Outcome: human-confirmation
+
+Human choice: Commit
+Outcome: continue-owning-workflow
+
+<!-- review-entry-id: human-confirmation-round-2 -->
