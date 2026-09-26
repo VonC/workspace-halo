@@ -22,6 +22,8 @@ REM (it picks the latest node22 in %PRGS%\nodes). Without switchnode, any
 REM Node 22+ already on PATH is used, so a plain 'npm install' setup works
 REM as well.
 REM Go: expected on PATH, only for the native host (scripts\build-native-host.ps1).
+REM Git: configures the npm-lock-public filter for package-lock.json, and
+REM repairs it when its version or its checkout-specific smudge path is stale.
 REM Optional: %HOME%\.npmrc (registry, proxy, ...) picked up for npm when
 REM HOME is defined by the global senv.
 REM Optional: senv.local.bat at the project root, to override any variable.
@@ -133,14 +135,25 @@ REM Keep package-lock.json portable across public and mirrored npm registries.
 REM Git stores canonical registry.npmjs.org URLs; checkout smudges them back to
 REM the registry selected by npm config for local installs. The helper resolves
 REM that registry dynamically, so no private hostname is persisted in Git config.
+REM The smudge command embeds this checkout's absolute path, so a matching
+REM filter version alone is not enough: a config written from another folder
+REM (a moved or recloned project) keeps a smudge script path that no longer
+REM exists, and every checkout of package-lock.json then fails the filter.
+REM Reconfigure whenever the version or the smudge command differs.
 set "PRJ_DIR_UNIX=%PRJ_DIR:\=/%"
 set "EXPECTED_NPM_LOCK_FILTER_VERSION=1"
+set "EXPECTED_NPM_LOCK_SMUDGE=bash %PRJ_DIR_UNIX%/scripts/npm-lock-smudge.sh"
 set "configured_npm_lock_filter_version="
+set "configured_npm_lock_smudge="
+set "npm_lock_filter_stale="
 set "NPM_LOCK_MIRROR_PATH=/repository/public-npm/"
 for /f "tokens=* delims=" %%i in ('git -C "%PRJ_DIR%" config filter."npm-lock-public".version 2^>nul') do set "configured_npm_lock_filter_version=%%i"
-if not "%configured_npm_lock_filter_version%"=="%EXPECTED_NPM_LOCK_FILTER_VERSION%" (
+for /f "tokens=* delims=" %%i in ('git -C "%PRJ_DIR%" config filter."npm-lock-public".smudge 2^>nul') do set "configured_npm_lock_smudge=%%i"
+if not "%configured_npm_lock_filter_version%"=="%EXPECTED_NPM_LOCK_FILTER_VERSION%" set "npm_lock_filter_stale=1"
+if not "%configured_npm_lock_smudge%"=="%EXPECTED_NPM_LOCK_SMUDGE%" set "npm_lock_filter_stale=1"
+if defined npm_lock_filter_stale (
   echo INFO: Configuring npm-lock-public Git content filter
-  git -C "%PRJ_DIR%" config filter.npm-lock-public.smudge "bash %PRJ_DIR_UNIX%/scripts/npm-lock-smudge.sh"
+  git -C "%PRJ_DIR%" config filter.npm-lock-public.smudge "%EXPECTED_NPM_LOCK_SMUDGE%"
   if errorlevel 1 (
     echo FATAL: unable to configure the npm-lock-public smudge filter
     exit /b 1
@@ -159,7 +172,10 @@ if not "%configured_npm_lock_filter_version%"=="%EXPECTED_NPM_LOCK_FILTER_VERSIO
   echo INFO: npm-lock-public Git content filter already configured
 )
 set "EXPECTED_NPM_LOCK_FILTER_VERSION="
+set "EXPECTED_NPM_LOCK_SMUDGE="
 set "configured_npm_lock_filter_version="
+set "configured_npm_lock_smudge="
+set "npm_lock_filter_stale="
 set "NPM_LOCK_MIRROR_PATH="
 
 if exist "%PRJ_DIR%\senv.local.bat" (
