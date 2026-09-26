@@ -1,8 +1,30 @@
 {
   "cSpell.words": [
+    "BGRA",
+    "Bkgnd",
+    "childid",
+    "COLORREF",
+    "dwms",
+    "dwmwa",
     "DWMWA",
+    "fatalf",
     "flyouts",
+    "gocache",
+    "Lpsz",
+    "LUID",
+    "MINIMIZEEND",
+    "MINIMIZESTART",
+    "nondisruptive",
+    "objid",
+    "Outofcontext",
+    "Progman",
+    "reinterception",
+    "replayable",
+    "replug",
+    "replugged",
     "rrggbb",
-    "WASDK"
+    "SHOWNOACTIVATE",
+    "WASDK",
+    "winevent"
   ]
 }

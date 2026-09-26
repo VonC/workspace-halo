@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.0.24
+
+- Stop VS Code windows from taking turns coming to the front after a monitor
+  unplug: the native host now intercepts a minimize only when it observes the
+  window go from shown to minimized without its own doing, so late or
+  reordered minimize events no longer restart the interception.
+- Keep the thumbnail halo for every prompt minimize, with exactly one restore
+  per interception; a minimize seen while the replay is pending completes it
+  instead of restoring the window again.
+- Let minimizes of unknown age, uncertain own calls, and capped or latched
+  cases through without the halo, and log each decision in
+  `native-host.log`.
+
 ## 0.0.23
 
 - Show the halo for a linked Git worktree whatever its folder is named, as
