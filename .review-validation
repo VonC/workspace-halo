@@ -1,0 +1,6 @@
+# Mandatory code-review validation floor for workspace-halo.
+# The repository has no pytest suite, so the built-in `ghog day` floor always
+# ends at exit 9 here. Its real gates are the Go and TypeScript suites, which
+# build.bat also runs before packaging.
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test-companion.ps1
+npm test
