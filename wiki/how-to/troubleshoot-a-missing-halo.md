@@ -49,6 +49,31 @@ to its window:
 2. If you customized `window.title`, the title match cannot work; the
    handshake becomes the only path, so focusing the window matters even more.
 
+## Check a minimized window shown without its halo
+
+When a window was minimized but its taskbar thumbnail shows no halo, the host
+most likely let that minimize through on purpose:
+
+1. Open the window's `native-host.log` (its path is in the **Workspace Halo**
+   output channel) and find the `minimize edge: shown->iconic` line at the
+   time of the minimize.
+2. Read its `action`. `action=intercept` means the halo was composed; if the
+   thumbnail still lacks it, look for an `own call unsettled` line after it.
+   `action=skip` means the minimize went through without the halo, and its
+   `reason` says why:
+   - `unknown-age`: the host could not prove the minimize was prompt, as after
+     a monitor unplug or a busy moment;
+   - `latched`: an earlier restore or replay stayed unsettled, so interception
+     is off until the host restarts; reload the window to rearm it;
+   - `cap`: minimizes came too fast; the cap reopens after a quiet period.
+3. When no `minimize edge` line exists at that time, check the binding above:
+   an unbound host observes nothing.
+
+The rules behind each reason are in
+[display triggers](../reference/display-triggers.md#minimize-interception-rules),
+and why the host prefers a missing halo to a window coming back is in
+[how the overlay stays inside its window](../explanation/how-the-overlay-stays-inside-its-window.md#interception-follows-the-observed-window-not-the-events).
+
 ## Read the logs
 
 Open **View > Output** and select **Workspace Halo**:

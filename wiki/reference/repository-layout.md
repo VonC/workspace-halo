@@ -8,7 +8,7 @@ The source tree of the extension, its native host, and their build scripts.
 | --- | --- |
 | `src/` | The TypeScript extension: `extension.ts` (controller, host lifecycle, handshake) and `model.ts` (pure decision functions: name derivation, root and logo selection, color resolution) |
 | `test/` | `model.test.ts`, the Node test suite of the pure model |
-| `companion/` | The Go/Win32 native host: `main_windows.go` and its test suite |
+| `companion/` | The Go/Win32 native host: `main_windows.go` (binding, rendering, triggers), `minimize_windows.go` (the pure minimize observation, phase and cap model), `minimize_hook_windows.go` (the minimize WinEvent hook and controller), and their `_test.go` suites |
 | `scripts/` | PowerShell and shell helpers used by the builds |
 | `bin/win32-x64/` | The compiled `workspace-halo-host.exe` packaged into the VSIX |
 | `dist/` | The bundled `extension.js` and generated `build-provenance.json` |
@@ -27,6 +27,7 @@ The source tree of the extension, its native host, and their build scripts.
 | `version.bat` | Audits a built VSIX's internal version, Git identity, local version tag, and SHA-256 |
 | `install.bat` | Installs the exact VSIX recorded by build provenance into `%PRGS%\vscodes\current` with `--force`; the `i` doskey alias runs it |
 | `senv.bat` | Initializes the project command prompt and its doskey aliases, and configures the `npm-lock-public` Git filter, again whenever its version or its checkout-specific smudge path is stale |
+| `.review-validation` | The code-review validation floor, one command per line: `scripts\test-companion.ps1` and `npm test`; not packaged |
 | `version.txt` | The next release as `X.Y.Z-SNAPSHOT -- <title>` plus its release-notes summary, read by the release preparation; excluded from the VSIX |
 | `workspace-halo-<version>-<commit>[-dirty]-win32-x64.vsix` | The packaged platform-specific extension with visible Git provenance |
 

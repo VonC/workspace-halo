@@ -67,7 +67,10 @@ described in
 ## Publish the platform-specific VSIX
 
 Every publish needs a `version` in `package.json` higher than the published
-one. Build with `build.bat`, then upload from the browser on the
+one, in plain `major.minor.patch` form: the Marketplace takes no semver
+pre-release suffix such as `-SNAPSHOT`. The release preparation sets it from
+`version.txt`, which keeps the `-SNAPSHOT` form until the release is built.
+Build with `build.bat`, then upload from the browser on the
 [management page](https://marketplace.visualstudio.com/manage):
 
 - First publish: **New extension > Visual Studio Code**, drop
