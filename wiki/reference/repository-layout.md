@@ -25,7 +25,8 @@ The source tree of the extension, its native host, and their build scripts.
 | `build.bat` | Full build: environment, dependencies, test gate, commit-named VSIX packaging and provenance verification; `build.bat notest` skips the test gate |
 | `version.bat` | Audits a built VSIX's internal version, Git identity, local version tag, and SHA-256 |
 | `install.bat` | Installs the exact VSIX recorded by build provenance into `%PRGS%\vscodes\current` with `--force`; the `i` doskey alias runs it |
-| `senv.bat` | Initializes the project command prompt and its doskey aliases |
+| `senv.bat` | Initializes the project command prompt and its doskey aliases, and configures the `npm-lock-public` Git filter, again whenever its version or its checkout-specific smudge path is stale |
+| `version.txt` | The next release as `X.Y.Z-SNAPSHOT -- <title>` plus its release-notes summary, read by the release preparation; excluded from the VSIX |
 | `workspace-halo-<version>-<commit>[-dirty]-win32-x64.vsix` | The packaged platform-specific extension with visible Git provenance |
 
 ## npm scripts
