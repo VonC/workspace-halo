@@ -1,8 +1,8 @@
 # v0.0.24 minimize_loop implementation plan -- observed edges instead of event order
 
 The native host stops deciding from WinEvent order and decides from the
-window's observed minimized state, in four steps: a split, a pure observation
-model, the cap, and acceptance.
+window's observed minimized state, in five steps: a split, a pure observation
+model, the cap, acceptance, and the manual unplug check.
 
 - **Split first**: the minimize code leaves the 2022-line
   `companion/main_windows.go` and the 661-line
@@ -12,8 +12,8 @@ model, the cap, and acceptance.
   `companion/minimize_windows.go`, driven by a controller whose Win32 calls go
   through a three-method window seam that tests can fake.
 - **Evidence everywhere**: every decision is one `native-host.log` line, and
-  the final step replays the recorded unplug timeline through the controller
-  before the manual three-to-one unplug.
+  Step 4 replays the recorded unplug timeline through the controller, and
+  Step 5 runs the manual three-to-one unplug on the committed build.
 
 > Markdown lint note: never leave a space immediately inside an inline code span
 > (MD038); when a snippet starts or ends with a space, write that space as the
@@ -24,7 +24,7 @@ model, the cap, and acceptance.
 
 Implement the v0.0.24 minimize_loop behavior described in
 [design.v0.0.24.minimize_loop.md](design.v0.0.24.minimize_loop.md) and
-[issue.v0.0.24.minimize_loop.md](issue.v0.0.24.minimize_loop.md), in four
+[issue.v0.0.24.minimize_loop.md](issue.v0.0.24.minimize_loop.md), in five
 ordered steps.
 
 - **Step 1 goal**: move the minimize code out of `main_windows.go` and its
@@ -39,7 +39,10 @@ ordered steps.
   lines.
 - **Step 4 goal**: acceptance tests that replay the design's acceptance cases
   and the recorded unplug timeline through the controller, the documentation
-  and changelog updates, the VSIX build, and the manual three-to-one unplug.
+  and changelog updates, and the VSIX build.
+- **Step 5 goal**: the manual three-to-one unplug with four VS Code windows on
+  the VSIX built from the committed Step 4 tree, with its log evidence and
+  per-action verdict table in the validation plan.
 
 ---
 
@@ -886,7 +889,7 @@ Time-gated status for Step 3:
 
 ---
 
-### Step 4. Acceptance scenarios, documentation and the unplug check
+### Step 4. Acceptance scenarios, documentation and the VSIX build
 
 #### Step 4 -- analysis and intent for acceptance and documentation
 
@@ -896,7 +899,7 @@ Issues to address:
   required behavior 6 asks for the recorded in-order and reordered sequences,
   arbitrarily late replay events, user actions around the replay, a missing
   event, late and unknown-age minimizes, ambiguous origin, and cap trip and
-  reset, plus one manual unplug.
+  reset (the one manual unplug it also asks for is Step 5).
 - The wiki still describes the event-driven interception and lists only the
   75 ms replay delay.
 
@@ -906,19 +909,13 @@ Fix intent:
   plus a four-window replay of the 2026-09-24 unplug timeline, all through
   `minimizeController` with scripted fake windows and delayed events.
 - Update the two wiki pages, the log reference and the changelog.
-- Build the VSIX with `build.bat`, install it, and run the manual
-  three-to-one unplug with four VS Code windows.
+- Build the VSIX with `build.bat`.
 
 Expected outcome:
 
 - Every acceptance case of the design has a named passing scenario.
-- The manual unplug log shows at most one interception attempt (one
-  `minimize intercepted` line, one `own restore` line) per external minimize
-  action and window, no repeated cycle, and no delayed return to the
-  foreground; the lines are kept as evidence in the validation plan. That
-  one attempt may issue two `ShowWindow` commands, `SW_SHOWNOACTIVATE` then a
-  single `SW_RESTORE` fallback (`fallback=true`); that is still one
-  interception.
+- The documentation describes the observed-edge interception, and the VSIX
+  packages.
 
 Step framing:
 
@@ -959,7 +956,7 @@ Step framing:
   and 4.0 s) while ticks run every 25 ms; every minimize WinEvent, including
   those caused by own calls, is delivered 3 to 6 s late and reordered. Assert
   at most one `ownRestore` attempt per window and minimize action (that one
-  attempt may issue the single `SW_RESTORE` fallback, as in the manual
+  attempt may issue the single `SW_RESTORE` fallback, as in the Step 5 manual
   check), no restore attempt after the late deliveries, every window ends
   Minimized, and no log holds a second `minimize intercepted` for the same
   action.
@@ -987,32 +984,6 @@ Step framing:
   after a monitor unplug, thumbnail halo kept for prompt minimizes, skipped
   cases logged).
 
-**Rollout sequence for v0.0.24 minimize_loop**:
-
-1. Commit Steps 1 to 4, each with the shared gate loop green.
-2. Run `build.bat` (Go and TypeScript test gates, then the commit-named
-   VSIX).
-3. Install the VSIX with `install.bat`, open four workspace windows spread
-   over three monitors, and reload them so each runs the new host.
-4. Unplug the video cable (three monitors to the laptop screen), wait 60 s,
-   plug it back.
-5. Copy the minimize lines of each window's `native-host.log` (path printed in
-   the Workspace Halo output channel) into the Step 4 section of the
-   validation plan, in one `text` fence per window headed only by its window
-   label (w1 to w4, from the log directory `window<N>`; no workspace name, so
-   no local detail is committed), keeping each line's timestamp. Keep only
-   `minimize edge`, `minimize event`,
-   `own restore`, `own replay`, `own call unsettled`, `minimize intercepted`,
-   `minimize replay`, `minimize interception` and `visibility=minimized`
-   lines, from 10 s before the unplug to 60 s after it.
-6. Judge the evidence per external minimize action in a table with one row
-   per `minimize edge: shown->iconic` line: window, edge timestamp, age bound,
-   decision (`intercept`, `skip` with its reason, or `cancel-replay`), the
-   number of `minimize intercepted` and `own restore` lines up to the next
-   external edge of the same window (at most one each; `fallback=true`
-   allowed), `own restore` lines after the replay was accepted (must be zero,
-   so no delayed return to the foreground), and the verdict.
-
 **Completion criteria**:
 
 - Shared gate loop green, then `build.bat` exits 0 and prints `OK: Packaged`.
@@ -1029,10 +1000,8 @@ Step framing:
   reports no finding on the four updated files except MD013 on table rows,
   which the existing wiki tables already carry (the repository has no
   `.markdownlint.json`, so MD013 applies at its 80-column default).
-- Every row of the rollout step 6 table passes: at most one interception
-  attempt per external minimize action, no `own restore` after an accepted
-  replay, and no `minimize intercepted` line without a matching external
-  edge; together this meets the issue's required behavior 6.
+- The manual unplug is not a Step 4 criterion: it runs in Step 5, on the VSIX
+  built from the committed Step 4 tree (decision Q12).
 
 #### Step 4 -- addendums for acceptance and documentation
 
@@ -1052,7 +1021,9 @@ Split guidance:
 
 - If `minimize_hook_windows_test.go` passes 550, move the scenario runner and
   the acceptance tests to `companion/minimize_acceptance_windows_test.go`
-  (new), leaving the controller unit tests in place.
+  (new), leaving the controller unit tests in place. If that file passes 550
+  in turn, move the scenario runner to
+  `companion/minimize_scenario_windows_test.go` (new).
 
 Full workflow timing run readiness:
 
@@ -1060,6 +1031,97 @@ Full workflow timing run readiness:
   loop; then `build.bat`.
 
 Time-gated status for Step 4:
+
+- No perf gate is affected; the acceptance timings are synthetic ticks.
+
+---
+
+### Step 5. Manual three-to-one unplug check
+
+#### Step 5 -- analysis and intent for the manual unplug check
+
+Issues to address:
+
+- The issue's required behavior 6 asks for one manual unplug on the real
+  trigger. The Step 4 scenarios replay the recorded timeline with fake
+  windows, which does not exercise the Win32 adapter (`installMinimizeHook`,
+  `minimizeWinEventProc`, `isIconic`, `showWindow`, `composeHalo`).
+- The unplug must run on a build whose name carries a commit, so the evidence
+  names the exact code it proves.
+
+Fix intent:
+
+- Build the VSIX from the committed Step 4 tree, install it, run the
+  three-to-one unplug with four VS Code windows, and record the log evidence
+  and a per-action verdict table in the validation plan.
+
+Expected outcome:
+
+- The manual unplug log shows at most one interception attempt (one
+  `minimize intercepted` line, one `own restore` line) per external minimize
+  action and window, no repeated cycle, and no delayed return to the
+  foreground; the lines are kept as evidence in the validation plan. That
+  one attempt may issue two `ShowWindow` commands, `SW_SHOWNOACTIVATE` then a
+  single `SW_RESTORE` fallback (`fallback=true`); that is still one
+  interception.
+
+Step framing:
+
+- Design link: "Acceptance Cases" (the manual unplug row); issue required
+  behavior 6; decisions Q11 and Q12.
+- Execution checklist reference: no code changes, so only the rollout
+  sequence below and its completion criteria apply.
+
+#### Step 5 -- implementation for the manual unplug check
+
+**Files involved**:
+
+- `docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md` (existing, the
+  Step 5 section receives the evidence).
+
+**Rollout sequence for v0.0.24 minimize_loop**:
+
+1. Commit Steps 1 to 4, each with the shared gate loop green.
+2. Run `build.bat` (Go and TypeScript test gates, then the commit-named
+   VSIX).
+3. Install the VSIX with `install.bat`, open four workspace windows spread
+   over three monitors, and reload them so each runs the new host.
+4. Unplug the video cable (three monitors to the laptop screen), wait 60 s,
+   plug it back.
+5. Copy the minimize lines of each window's `native-host.log` (path printed in
+   the Workspace Halo output channel) into the Step 5 section of the
+   validation plan, in one `text` fence per window headed only by its window
+   label (w1 to w4, from the log directory `window<N>`; no workspace name, so
+   no local detail is committed), keeping each line's timestamp. Keep only
+   `minimize edge`, `minimize event`,
+   `own restore`, `own replay`, `own call unsettled`, `minimize intercepted`,
+   `minimize replay`, `minimize interception` and `visibility=minimized`
+   lines, from 10 s before the unplug to 60 s after it.
+6. Judge the evidence per external minimize action in a table with one row
+   per `minimize edge: shown->iconic` line: window, edge timestamp, age bound,
+   decision (`intercept`, `skip` with its reason, or `cancel-replay`), the
+   number of `minimize intercepted` and `own restore` lines up to the next
+   external edge of the same window (at most one each; `fallback=true`
+   allowed), `own restore` lines after the replay was accepted (must be zero,
+   so no delayed return to the foreground), and the verdict.
+
+**Completion criteria**:
+
+- `build.bat` exits 0 and prints `OK: Packaged` with a VSIX name that
+  carries the Step 4 commit and no `dirty` marker.
+- Every row of the rollout step 6 table passes: at most one interception
+  attempt per external minimize action, no `own restore` after an accepted
+  replay, and no `minimize intercepted` line without a matching external
+  edge; together this meets the issue's required behavior 6.
+
+#### Step 5 -- addendums for the manual unplug check
+
+Line-budget checkpoint:
+
+- `docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md`: evidence only; no
+  code file changes.
+
+Time-gated status for Step 5:
 
 - No perf gate is affected; the manual unplug is judged on log evidence, not
   on timing.
@@ -1080,4 +1142,6 @@ Time-gated status for Step 4:
 | Q08 | 100% statement coverage of `minimize_windows.go`, and of `minimize_cap_windows.go` after a split, is a Step 2 and Step 3 completion criterion, enforced by the pure-model coverage gate script over the profile; the hook file stays evidence-only | Ready-to-run command templates; Step 2 and Step 3 completion criteria | Evidence only (an untested model branch passes); 100% of both files (the Win32 seam implementation is unreachable in unit tests) |
 | Q09 | Per-step gate loop: `ghog day` (expected `exit=9`), then `scripts\test-companion.ps1`, then `npm test`; `build.bat` once in Step 4 | Ready-to-run command templates; every step's completion criteria | Go suite only per step (departs from the groundhog-first rule); `build.bat` every step (a VSIX per step for no signal) |
 | Q10 | The legacy `minimize end` line and the re-prime lines are dropped; the `restore-honored` edge line and the `minimize event: end` line carry the facts; the three kept interception lines stay | Step 2 controller; Step 4 log reference | Keep writing `minimize end` (two lines for one fact, with a changed meaning) |
-| Q11 | Manual unplug evidence is committed in the Step 4 section of the validation plan as timestamped per-window excerpts labeled w1 to w4 only, judged by a per-action table (one row per external minimize edge) | Step 4 rollout sequence and completion criteria | Full logs committed (large, local details); an ignored `a.*` file only (evidence lost) |
+| Q11 | Manual unplug evidence is committed in the Step 5 section of the validation plan as timestamped per-window excerpts labeled w1 to w4 only, judged by a per-action table (one row per external minimize edge) | Step 5 rollout sequence and completion criteria | Full logs committed (large, local details); an ignored `a.*` file only (evidence lost) |
+| Q12 | The manual unplug is its own Step 5, after the Step 4 commit, because the rollout installs the VSIX built from the committed tree while a code review can only recommend a commit for a complete step; Step 4 ends with the acceptance scenarios, documentation and build (Step 4 code review, round 1) | Plan goal; Step 4 criteria; Step 5 | Run the unplug on the uncommitted `dirty` VSIX before the Step 4 commit (the evidence names no commit); keep the unplug in Step 4 and commit it unreviewed (bypasses the review gate) |
+| Q13 | The repository declares its code-review validation floor in a versioned root `.review-validation`: `scripts\test-companion.ps1` and `npm test`, because the built-in `ghog day` floor always ends at exit 9 in this non-pytest repository (Step 4 code review, round 1) | Code-review requests from Step 4 on | Keep the built-in `ghog day` floor (never passes here); a per-request command list only (additions cannot remove the failing default) |
