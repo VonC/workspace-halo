@@ -1,0 +1,10 @@
+0.0.24-SNAPSHOT -- Observed, Not Ordered
+
+Provisional title. The release notes for v0.0.24 are written by
+prepare_release_notes from the commits made since v0.0.23.
+
+The effort is documented in docs/v0.0.24/: the native host now decides
+minimize interceptions from the window's observed state instead of
+WinEvent order, so a monitor unplug no longer makes the VS Code windows
+take turns coming back to the foreground. The same cycle updates the
+fast-uri, js-yaml and undici lock entries for their advisories.

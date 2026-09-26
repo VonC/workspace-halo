@@ -20,5 +20,6 @@ senv.local.bat
 src/**
 test/**
 tsconfig.json
+version.txt
 wiki/**
 *.vsix
