@@ -33,8 +33,7 @@ timer tick instead of input events.
 
 Windows composes Alt+Tab and taskbar thumbnails from the last frames a window
 presented. A window minimized before its halo was ever composed would show a
-bare thumbnail. The host therefore hooks the system's minimize events for its
-target process and, on the first minimize transition:
+bare thumbnail. So when the host observes a minimize it did not cause, it:
 
 1. cancels the transition by restoring the window without activating it;
 2. composes and flushes the child halo through DWM;
@@ -43,3 +42,46 @@ target process and, on the first minimize transition:
 The replayed minimize then captures an already-composed window, so the
 thumbnail carries the border, name, and logo. While the window stays
 minimized, the halo remains part of its composed image.
+
+## Interception follows the observed window, not the events
+
+The host still hooks the system's minimize events for its target process, but
+an event only makes it look at the window: it reads whether the window is
+minimized, as it also does on every 25 millisecond tick, and only a change
+between two readings can start an interception. The order, lateness or loss of
+events therefore changes nothing. Events can arrive seconds late and out of
+order, as they did while monitors were unplugged. A late event now finds the
+window already in its current state and does nothing. Before this change, a
+late event could re-trigger the interception and bring windows back to the
+front in a loop.
+
+The host's own restore and replay are checked the same way. `ShowWindow`
+returns once the window's thread has applied the change, so the host reads the
+window before and after each call and takes the after-reading as the new
+state. Its own transitions are never seen as someone else's minimize. Each
+interception performs exactly one restore. A minimize observed while the
+replay is still pending, whether a late animation or a second user minimize,
+cancels the replay and keeps the halo already composed, instead of restoring
+the window again.
+
+Some minimizes go through without the halo, on purpose:
+
+- **Unknown age**: when the last reading that found the window shown is more
+  than 500 milliseconds old (a stalled host thread), the minimize may have
+  happened long ago. Restoring it now would bring back a window the user saw
+  minimize, so it is left alone.
+- **Uncertain own call**: when a restore or a replay has not produced the
+  expected state after one second, the host cannot tell a slow call from
+  someone else's action. It restores nothing on that uncertain state and turns
+  interception off for the rest of the host session, because the pending call
+  could still apply at any later time and look like a new minimize.
+- **Capped**: a third interception within two seconds, which normal use never
+  produces, trips a cap. It stays closed until five seconds pass with no
+  minimize at all, so a residual loop is stopped rather than slowed down.
+- **Latched**: once interception is off for the session, every minimize goes
+  through until the host restarts.
+
+Each of these costs only the halo in one thumbnail, never an unexpected return
+of the window to the foreground. Every decision is logged, as listed in
+[logs and processes](../reference/logs-and-processes.md), and the constants
+are in [display triggers](../reference/display-triggers.md).

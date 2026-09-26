@@ -27,6 +27,29 @@ bound window (`bound to hwnd=...`), every visibility change
 (`visibility=<reason>`), trigger events (`alt-tab gesture`, `taskbar hover`,
 `double-shift gesture`), and the minimize interception steps.
 
+The minimize interception writes one line per decision:
+
+- `minimize edge: shown->iconic age<=<n>ms action=<action>` for an observed
+  minimize, with `intercept`, `cancel-replay`, or `skip` followed by
+  `reason=unknown-age`, `reason=latched` or `reason=cap`;
+  `minimize edge: iconic->shown action=restore-honored` for an observed
+  restore;
+- `minimize event: start|end age=<n>ms` for each minimize notification of the
+  window, with the age of the notification;
+- `own restore: before=<state> after=<state> fallback=<bool>` and
+  `own replay: before=<state> after=<state>` for the host's own calls, and
+  `own call unsettled: expected=<state> observed=<state>` when one did not
+  reach its expected state;
+- `minimize interception disabled: own call unsettled (...)` when interception
+  is latched off for the host session;
+- `minimize interception suspended: 2 intercepts in 2000ms` and
+  `minimize interception resumed after 5000ms quiet` when the cap trips and
+  rearms;
+- next to them, the lines already written by earlier versions:
+  `minimize intercepted: restored=... replay-in=...`,
+  `minimize replay requested after halo composition` and
+  `minimize replay accepted with composed halo`.
+
 A host started by hand without `--log` writes to
 `%TEMP%\workspace-halo-companion.log` instead.
 
