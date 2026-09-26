@@ -1322,3 +1322,678 @@ Human choice: Commit
 Outcome: continue-owning-workflow
 
 <!-- review-entry-id: human-confirmation-round-1 -->
+
+## Round 1 by requestor - Step 4
+
+- Recorded: 2026-09-26T00:41:56+02:00
+- Exchange: code/code/v0.0.24/minimize_loop
+- Umbrella: none
+- Reviewed document: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+- Requestor LLM nature: claude
+- Reviewer LLM nature: unrecorded
+- Implementation step: 4
+- Outcome: request
+
+### Review identity for step 4 minimize_loop (round 1)
+
+Umbrella draft: none
+Implementation plan: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+Implementation step: 4
+Review round: 1
+
+### Code review evidence for step 4 minimize_loop (round 1)
+
+request_index_tree: 21a01eb02faf5b31a4c57c361be9c2d39bb6d14d
+resolved_validation_set:
+
+- ghog day (sources: project)
+- powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test-companion.ps1 (sources: plan)
+- npm test (sources: plan)
+- Push-Location companion; gofmt -l .; go vet ./...; Pop-Location (sources: plan)
+- git grep -nE 'Lateness bound|Settle timeout|Interception cap' -- wiki/reference/display-triggers.md (sources: plan)
+- git grep -nE '^## 0\.0\.24' -- CHANGELOG.md (sources: plan)
+- switchnode 22 then npx --yes markdownlint-cli2 on the four updated Markdown files (MD013 on table rows only) (sources: plan)
+- build.bat (exit 0, OK: Packaged) (sources: plan)
+
+commit_plan_result:
+
+```text
+state: valid
+ready: true
+group 1: test(minimize_loop): replay acceptance cases
+group 1 path: companion/minimize_scenario_windows_test.go
+group 1 path: companion/minimize_acceptance_windows_test.go
+group 1 path: companion/minimize_hook_windows_test.go
+group 2: docs(minimize_loop): document observed-edge minimize
+group 2 path: wiki/reference/display-triggers.md
+group 2 path: wiki/explanation/how-the-overlay-stays-inside-its-window.md
+group 2 path: wiki/reference/logs-and-processes.md
+group 3: docs(minimize_loop): add 0.0.24 changelog entry
+group 3 path: CHANGELOG.md
+group 4: docs(minimize_loop): record step 4 check
+group 4 path: docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md
+staged path: CHANGELOG.md
+staged path: companion/minimize_acceptance_windows_test.go
+staged path: companion/minimize_hook_windows_test.go
+staged path: companion/minimize_scenario_windows_test.go
+staged path: docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md
+staged path: wiki/explanation/how-the-overlay-stays-inside-its-window.md
+staged path: wiki/reference/display-triggers.md
+staged path: wiki/reference/logs-and-processes.md
+```
+
+### Requestor assessment for step 4 minimize_loop (round 1)
+
+Step 4 is not fully implemented: the implementation check wrote the exact
+`No. Step 4 has NOT been fully implemented.` sentence into the validation
+plan. The automated part is complete. The missing part is the manual
+three-to-one unplug (plan rollout steps 3 to 6 and the last completion
+criterion), which needs a person at the machine. The human asked for this
+review of the automated part now and will run the unplug later. That later
+evidence will be recorded in the validation plan and checked again.
+
+- **Tests**: `go test -v` gives 61 top-level `--- PASS` lines (57 after
+  Step 3, plus 4 new: `TestMinimizeAcceptanceCases`,
+  `TestMinimizeAcceptanceClickDuringPrimingStillReplays`,
+  `TestMinimizeAcceptanceRestoreAfterReplayStaysRestored` and
+  `TestMinimizeAcceptanceRecordedUnplugTimeline`).
+  `TestMinimizeAcceptanceCases` has 17 passing sub-tests, and the 11 fuzz
+  seeds still pass.
+- **Static checks**: `gofmt -l` prints nothing and `go vet ./...` exits 0.
+  The first completion grep finds the three constants rows
+  (`display-triggers.md:84-86`); the second finds `CHANGELOG.md:5`
+  (`## 0.0.24`).
+- **Markdown**: markdownlint-cli2 on the four updated files reports 13
+  findings, all MD013 on `display-triggers.md` table rows (the existing
+  priority table and the timing constants table), as the plan allows. The
+  validation plan lints clean.
+- **Gate**: `ghog day` ends at `exit=9` ("not a pytest project").
+  `scripts\test-companion.ps1` prints `ok  workspace-halo/companion` and exits
+  0, and `npm test` exits 0 (8 pass). `build.bat` exits 0 and prints
+  `OK: Packaged workspace-halo-0.0.23-3e4d05f-dirty-win32-x64.vsix`, built
+  from the uncommitted tree.
+- **Coverage**: no production file changed. The pure-model coverage gate
+  still passes, and the controller stays at 100%. The five Win32 adapter
+  functions stay at 0%, evidence-only under plan Q08; the manual unplug is
+  what exercises them.
+- **Architecture**: only test files, the wiki and the changelog change. The
+  runner reaches the controller through `newMinimizeController`, `observe`
+  and `onEvent` and the `minimizeWindow` seam. It reads `model` fields only in
+  assertions. The three Step 2 carry-overs (controller and adapter in one
+  file, global `activeApp`, 1846-line `main_windows.go`) are untouched.
+- **Performance**: no host-path change. The runner steps one millisecond at a
+  time and scans a handful of pending events per millisecond, linear in
+  simulated time; the longest scenario (90 s latch) runs about 91000
+  iterations, and the Go suite still runs in seconds.
+- **Feature integrity**: the host binary is unchanged since Step 3. The wiki
+  no longer describes the old event-driven interception.
+- **Line budgets and split**: putting the runner and the scenarios in
+  `minimize_hook_windows_test.go` (323 lines) would have taken it far past
+  650. As the plan's split guidance asks, they went to new files. The
+  acceptance file alone reached 620 lines (the 550-to-650 band), so the
+  runner was split out by responsibility:
+  `minimize_scenario_windows_test.go` 226, `minimize_acceptance_windows_test.go`
+  408, `minimize_hook_windows_test.go` 325. Wiki and changelog files are 88,
+  87, 69 and 224 lines (advisory 77, 75, 54, 219).
+- **Interpretation choices for the reviewer to judge**:
+  - Two new test files instead of one: the plan's split target was
+    `minimize_acceptance_windows_test.go`; the runner went to
+    `minimize_scenario_windows_test.go` to keep the acceptance file below 550.
+  - The design row "events delivered in any order, or 3 s late" has two
+    sub-tests, one in order and one reordered, so there are 17 sub-tests for
+    16 automated rows. The manual unplug row is the rollout check.
+  - Normal path "20 ms after a shown reading": a prompt `MinimizeStart`
+    (lag 0) triggers the observation at 1020, 20 ms after the seed reading,
+    so the decisive line is `age<=20ms action=intercept`.
+  - Late animation "100 ms after the priming restore": the replay is due
+    75 ms after the restore, so a 99 ms host-thread stall after the restore
+    keeps the tick from replaying first. The re-minimize at restore + 100 then
+    finds Priming and logs `age<=100ms action=cancel-replay`. The "within
+    250 ms" row uses a re-minimize at restore + 60 with no stall.
+  - A click during Priming is a step that changes nothing the host observes,
+    which is the design's claim; the test checks the replay still minimizes
+    the window.
+  - The unplug timeline defers w2's `SW_SHOWNOACTIVATE`, so its one
+    interception takes the single `SW_RESTORE` fallback, matching the plan's
+    allowance.
+  - The changelog entry sits under `## 0.0.24` below `## Unreleased`, as the
+    0.0.22 and 0.0.23 entries do, while `package.json` is still 0.0.23; the
+    release step bumps the version.
+
+### Implementation report for step 4 minimize_loop (round 1)
+
+Step 4 changes on top of the Step 3 cap; no production code changes:
+
+- `companion/minimize_scenario_windows_test.go` (new): the scenario runner.
+  `minimizeScenario` holds a shared fake clock, one host (controller and log
+  buffer) per window, the pending WinEvents and a stall deadline. `run` walks
+  one millisecond at a time. At each tick it applies the scripted steps
+  (which must be in tick order), then, unless stalled, delivers the due
+  events (`deliverDue`, in generation order, including events caused by those
+  deliveries), then runs the 25 ms tick on every controller. It can be called
+  again to continue a scenario. `minimizeScenarioWindow` embeds
+  `fakeMinimizeWindow`, overrides `showWindow` to record restore command
+  ticks, and emits a WinEvent on every minimized-state change. The n-th event
+  of window i is delivered `lags[(n+i) % len(lags)]` ms later
+  (`minimizeEventLost` or no lag list drops it). The step kinds are minimize,
+  restore, click, defer an own command, apply the deferred call, stall, and
+  restart the host (which clears the deferral). `requireOrderedLog` checks
+  lines in order.
+- `companion/minimize_acceptance_windows_test.go` (new):
+  `minimizeAcceptanceCase` and `minimizeAcceptanceCases` (17 rows),
+  checked by `TestMinimizeAcceptanceCases`. Each row asserts the restore
+  attempts, the `minimize intercepted` count, the `minimize edge` count, the
+  final phase on the observed state, the ordered decisive lines, the
+  forbidden lines, and an optional extra check. The 20 s stream row continues
+  the scenario to prove no resume at 27599, the resume at 27600, then a new
+  intercept. Also `TestMinimizeAcceptanceClickDuringPrimingStillReplays`,
+  `TestMinimizeAcceptanceRestoreAfterReplayStaysRestored`, and
+  `TestMinimizeAcceptanceRecordedUnplugTimeline`. The timeline test runs four
+  hosts: w4, w1 and w2 are minimized at 10000, 12700 and 14000, w3 stays
+  shown, events arrive 3 to 6 s late and reordered, and w2 uses the fallback.
+  It asserts one restore attempt and one replay per minimized window, no
+  restore after the first late event, Minimized with the halo, and no
+  command on w3.
+- `companion/minimize_hook_windows_test.go`: header sentence pointing to the
+  runner that reuses `fakeMinimizeWindow`.
+- `wiki/reference/display-triggers.md`: `minimized` row names a pending
+  replay and an unsettled own call; new "Minimize interception rules"
+  section; four timing constants rows (`Lateness bound`, `Settle timeout`,
+  `Interception cap`, `Cap quiet period`).
+- `wiki/explanation/how-the-overlay-stays-inside-its-window.md`: the replay
+  starts from an observed minimize the host did not cause; new section
+  "Interception follows the observed window, not the events" covering
+  events as observation triggers, own-call absorption, the Priming
+  cancellation, and the four let-through cases.
+- `wiki/reference/logs-and-processes.md`: list of the minimize decision
+  lines next to the three kept interception lines.
+- `CHANGELOG.md`: `## 0.0.24` section with three bullets.
+- `docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md`: Step 4 sections
+  filled with the `No` verdict, evidence, and a "Missing work for Step 4"
+  list for the manual unplug; the opening theme sentence updated (the
+  document-level line stays `No`).
+
+### Change summary for step 4 minimize_loop (round 1)
+
+Staged paths:
+
+- `M CHANGELOG.md`
+- `A companion/minimize_acceptance_windows_test.go`
+- `M companion/minimize_hook_windows_test.go`
+- `A companion/minimize_scenario_windows_test.go`
+- `M docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md`
+- `M wiki/explanation/how-the-overlay-stays-inside-its-window.md`
+- `M wiki/reference/display-triggers.md`
+- `M wiki/reference/logs-and-processes.md`
+
+Root `a.commit` groups (formatted by `wac`, `commit-plan-check` ready):
+
+1. `test(minimize_loop): replay acceptance cases`: the runner, the
+   acceptance tests, and the hook test header.
+2. `docs(minimize_loop): document observed-edge minimize`: the three wiki
+   pages.
+3. `docs(minimize_loop): add 0.0.24 changelog entry`: `CHANGELOG.md`.
+4. `docs(minimize_loop): record step 4 check`: the validation plan. It
+   records a `No` verdict, so it uses "check" rather than the `record step 4
+   validation` marker, which is reserved for a plan newly marking a step
+   `Yes`.
+
+### Writer response for step 4 minimize_loop (round 1)
+
+Writer response:
+
+First round of the Step 4 review: no earlier feedback to accept or dispute.
+The human asked for this review before the manual unplug, so the review
+covers the automated part (acceptance scenarios, wiki, changelog, validation
+record). The interpretation choices (two new test files, the split design
+row, the event-triggered normal path, the stall for the late animation, the
+no-op click, the changelog placement) are listed in the assessment for the
+reviewer to judge.
+
+### Reviewer focus for step 4 minimize_loop (round 1)
+
+Check the exact plan step, staged implementation, test evidence, repaired path inventory, and a.commit accuracy.
+
+<!-- review-entry-id: request-step-4-round-1 -->
+
+## Round 1 by human - Step 4 - escalation
+
+- Recorded: 2026-09-26T08:36:54+02:00
+- Exchange: code/code/v0.0.24/minimize_loop
+- Umbrella: none
+- Reviewed document: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+- Requestor LLM nature: claude
+- Reviewer LLM nature: unrecorded
+- Implementation step: 4
+- Outcome: escalation
+
+wait timed out while answer was absent
+
+<!-- review-entry-id: escalation-round-1 -->
+
+## Round 1 by human - Step 4 - human-reclaim
+
+- Recorded: 2026-09-26T08:47:28+02:00
+- Exchange: code/code/v0.0.24/minimize_loop
+- Umbrella: none
+- Reviewed document: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+- Requestor LLM nature: claude
+- Reviewer LLM nature: unrecorded
+- Implementation step: 4
+- Outcome: human-reclaim
+
+### Forced resume decision for step 4 minimize_loop (round 1)
+
+The requestor's `wait-answer` timed out while no answer was published, and the
+exchange was recorded as escalated. The human decided this was a stopped
+handoff rather than a failure: no reviewer session was running when the
+request was published, and a reviewer is now waiting for this resolution to
+start the review. The round 1 request, its evidence and the staged work are
+unchanged, so round 1 resumes with the same request.
+
+<!-- review-entry-id: human-reclaim-round-1 -->
+
+## Round 1 by reviewer - Step 4
+
+- Recorded: 2026-09-26T09:00:18+02:00
+- Exchange: code/code/v0.0.24/minimize_loop
+- Umbrella: none
+- Reviewed document: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+- Requestor LLM nature: claude
+- Reviewer LLM nature: codex
+- Implementation step: 4
+- Outcome: answer
+
+### Assessed index identity for step 4 minimize_loop (exchange 1) (round 1)
+
+Baseline index tree: 21a01eb02faf5b31a4c57c361be9c2d39bb6d14d
+
+Assessed index tree: 21a01eb02faf5b31a4c57c361be9c2d39bb6d14d
+
+### Implementation check for step 4 minimize_loop (exchange 1) (round 1)
+
+Result:
+
+No. Step 4 has NOT been fully implemented.
+
+The staged runner covers the automated design cases and the recorded four-window simulation. The documentation and changelog match the observed-edge model. The plan's manual three-to-one monitor unplug, per-window timestamped logs, and per-external-edge verdict table are absent. The simulation does not replace that completion criterion.
+
+Validation plan effects:
+
+The existing Step 4 validation rows already use the exact No sentence and list rollout steps 3 through 6 as missing work. The document-level status remains No. I made no validation-plan edit and no substantive repair.
+
+### Pre-repair mandatory checks and coverage for step 4 minimize_loop (exchange 1) (round 1)
+
+The requestor reports 61 passing top-level Go tests, 17 acceptance subtests, passing Go format and vet, 8 passing TypeScript tests, and a successful VSIX package build from the dirty tree. I reviewed the staged tests and the plan statically; I did not rerun the requestor's resolved validation set or measure coverage. The retained a.ghog.log shows ghog check skipped because check.bat is absent and ghog affected ended exit 9 because this is not a pytest project. The pure-model gate covers minimize_windows.go; the Win32 adapter is outside it and remains evidence-only under Q08. The manual host exercise is outstanding.
+
+### Resolved validation set and sources for step 4 minimize_loop (exchange 1) (round 1)
+
+The request contains ghog day (project default) plus these plan commands: scripts\test-companion.ps1, npm test, Go format and vet, the two documentation greps, markdownlint-cli2 on the four changed Markdown files, and build.bat. The project has no versioned .review-validation declaration, so the current resolver retains ghog day as mandatory. The plan and request command lists still agree.
+
+### Resolver drift and direction for step 4 minimize_loop (exchange 1) (round 1)
+
+No resolver drift: the request's default ghog day and seven plan additions match the current project declaration and plan. The default itself is unsuitable for this non-pytest repository: ghog day ended exit 9. This is a validation-floor finding, not a command-set drift.
+
+### Repository state around validation for step 4 minimize_loop (exchange 1) (round 1)
+
+Baseline and assessed index tree are 21a01eb02faf5b31a4c57c361be9c2d39bb6d14d. Umbrella digest is not applicable and did not change. Validation-state comparison is acceptable with no tracked, untracked, or ignored path changes. No reviewer patch was staged.
+
+### Repair inventory for step 4 minimize_loop (exchange 1) (round 1)
+
+Repairs made: None.
+
+Paths staged: None.
+
+### Commit plan assessment for step 4 minimize_loop (exchange 1) (round 1)
+
+Independent commit-plan-check returned state valid, ready true, with no diagnostics. Its four ordered groups cover all eight staged paths: acceptance tests, three wiki pages, changelog, then Step 4 validation plan. The subjects and membership remain accurate for the staged work. This mechanical pass does not satisfy the incomplete implementation and validation floor.
+
+### Findings and boundaries for step 4 minimize_loop (exchange 1) (round 1)
+
+Unresolved findings:
+
+- Step 4's manual three-to-one unplug has not been run. The required per-window timestamped log excerpts and per-external-edge verdict table are absent, so the plan's last completion criterion cannot be assessed.
+- The request keeps ghog day as a mandatory project default, but it ended exit 9 because the repository has no pytest suite. The versioned .review-validation declaration is absent, so the mandatory validation floor has no passing project-default command.
+
+Boundary-crossing work:
+
+- The plan orders a committed Step 4 VSIX before the manual unplug, while the review policy requires complete Step 4 evidence before a commit-ready recommendation. Resolve that sequencing in the plan or complete the manual check from the available build and record how its evidence satisfies the criterion.
+- Declare the repository's actual mandatory validation commands in a versioned .review-validation file or resolve the project-default gate through the owning workflow; this project-level policy change exceeds the staged Step 4 scope.
+
+### Writer instructions for step 4 minimize_loop (exchange 1) (round 1)
+
+Complete the manual unplug and record the prescribed per-window logs and verdict table, or obtain an explicit plan change that places that check after the commit gate. Resolve the non-pytest project validation default with a versioned declaration of the real gates, then run the resulting mandatory commands and publish a new exact review request. Keep the current staged test and documentation groups unless their content changes.
+
+### Decision rationale for step 4 minimize_loop (exchange 1) (round 1)
+
+Changes requested. Identity and staged attribution pass; the staged tests and docs show no new static defect; a.commit passes mechanically. Implementation completeness fails on the missing manual criterion, and validation readiness fails on the mandatory ghog day exit 9. I made no repair. The six-part commit-ready floor is incomplete.
+
+### Final reviewer decision for step 4 minimize_loop (exchange 1) (round 1)
+
+Decision: changes-requested. The writer must address the concrete instructions and publish another review round. This advisory answer does not authorize a commit.
+
+<!-- review-entry-id: answer-step-4-round-1 -->
+
+## Round 2 by requestor - Step 4
+
+- Recorded: 2026-09-26T09:14:34+02:00
+- Exchange: code/code/v0.0.24/minimize_loop
+- Umbrella: none
+- Reviewed document: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+- Requestor LLM nature: claude
+- Reviewer LLM nature: codex
+- Implementation step: 4
+- Outcome: request
+
+### Review identity for step 4 minimize_loop (round 2)
+
+Umbrella draft: none
+Implementation plan: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+Implementation step: 4
+Review round: 2
+
+### Code review evidence for step 4 minimize_loop (round 2)
+
+request_index_tree: 4b38a048f920b8b8cb6ade92f78e700aea338c6b
+resolved_validation_set:
+
+- powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test-companion.ps1 (sources: project)
+- npm test (sources: project)
+- ghog day (plan gate loop; expected exit=9, not a pytest project) (sources: plan)
+- Push-Location companion; gofmt -l .; go vet ./...; Pop-Location (sources: plan)
+- git grep -nE 'Lateness bound|Settle timeout|Interception cap' -- wiki/reference/display-triggers.md (sources: plan)
+- git grep -nE '^## 0\.0\.24' -- CHANGELOG.md (sources: plan)
+- switchnode 22 then npx --yes markdownlint-cli2 on the four updated Markdown files (MD013 on table rows only) (sources: plan)
+- build.bat (exit 0, OK: Packaged) (sources: plan)
+
+commit_plan_result:
+
+```text
+state: valid
+ready: true
+group 1: chore(review): declare the code-review floor
+group 1 path: .review-validation
+group 2: test(minimize_loop): replay acceptance cases
+group 2 path: companion/minimize_scenario_windows_test.go
+group 2 path: companion/minimize_acceptance_windows_test.go
+group 2 path: companion/minimize_hook_windows_test.go
+group 3: docs(minimize_loop): document observed-edge minimize
+group 3 path: wiki/reference/display-triggers.md
+group 3 path: wiki/explanation/how-the-overlay-stays-inside-its-window.md
+group 3 path: wiki/reference/logs-and-processes.md
+group 4: docs(minimize_loop): add 0.0.24 changelog entry
+group 4 path: CHANGELOG.md
+group 5: docs(minimize_loop): move unplug check to step 5
+group 5 path: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+group 6: docs(minimize_loop): record step 4 validation
+group 6 path: docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md
+staged path: .review-validation
+staged path: CHANGELOG.md
+staged path: companion/minimize_acceptance_windows_test.go
+staged path: companion/minimize_hook_windows_test.go
+staged path: companion/minimize_scenario_windows_test.go
+staged path: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+staged path: docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md
+staged path: wiki/explanation/how-the-overlay-stays-inside-its-window.md
+staged path: wiki/reference/display-triggers.md
+staged path: wiki/reference/logs-and-processes.md
+```
+
+### Requestor assessment for step 4 minimize_loop (round 2)
+
+Step 4 is fully implemented against its amended scope: the implementation
+check now writes the exact `Yes. Step 4 has been fully implemented.` sentence
+into the validation plan. The document-level line stays `No`, because the new
+Step 5 (the manual unplug) has not started.
+
+Both round 1 findings are addressed by the human's decisions, not by
+bypassing them:
+
+- **Manual unplug sequencing**: the human chose the plan change that places
+  the unplug after the commit gate. The plan now has five steps. Step 4 is
+  "Acceptance scenarios, documentation and the VSIX build" and ends with the
+  build. Its completion criteria no longer include the unplug, and a bullet
+  points to Step 5. The new Step 5, "Manual three-to-one unplug check", holds
+  the full rollout sequence (commit Steps 1 to 4, commit-named build,
+  install, unplug, per-window excerpts, per-action table) and the unplug
+  completion criterion. It adds a criterion that the VSIX name carries the
+  Step 4 commit with no `dirty` marker. Decision Q12 records the split and
+  its rejected alternatives, and Q11 now points the evidence to the Step 5
+  section of the validation plan. The validation plan gains a not-started
+  Step 5 section.
+- **Validation floor**: the human chose a versioned declaration. The new root
+  `.review-validation` declares `powershell -NoProfile -ExecutionPolicy
+  Bypass -File scripts\test-companion.ps1` and `npm test`. The llm-shared
+  loader `load_project_validation_commands` reads exactly those two commands
+  from it, and `git check-ignore` confirms the file is not ignored. Both
+  commands pass on the staged tree: `ok  workspace-halo/companion` and 8 of 8
+  TypeScript tests. Decision Q13 records it. `ghog day` is still run as the
+  plan's gate-loop command, whose documented expected result for this
+  repository is `exit=9`, and it ends there.
+
+Evidence for the unchanged Step 4 content (tests, wiki, changelog), as in
+round 1:
+
+- **Tests**: 61 top-level `--- PASS` lines, 17 acceptance sub-tests, 11 fuzz
+  seeds; `gofmt -l` prints nothing and `go vet ./...` exits 0. No Go file
+  changed since round 1.
+- **Completion greps**: the constants rows (`display-triggers.md:84-86`) and
+  `CHANGELOG.md:5`.
+- **Markdown**: the four Step 4 files report only MD013 on
+  `display-triggers.md` table rows. The validation plan lints clean. The plan
+  reports only MD013 on the decision-table rows: the 11 existing rows and the
+  two new ones, which follow the same one-row-per-decision format.
+- **Build**: `build.bat` exits 0 and prints `OK: Packaged` (a `dirty` build
+  of the uncommitted tree; the commit-named build is a Step 5 criterion now).
+- **Coverage, architecture, performance, feature integrity**: unchanged from
+  round 1. No production file changed, the pure-model gate passes, the
+  runner goes through the controller's entry points and the `minimizeWindow`
+  seam, it is linear in simulated time, and the host binary is unchanged.
+  The three Step 2 carry-overs remain as recorded.
+- **Review transcript**: `docs/v0.0.24/review.code.v0.0.24.minimize_loop.md`
+  is modified by the exchange itself and left unstaged. As in Step 3, it is
+  committed after the review.
+
+### Implementation report for step 4 minimize_loop (round 2)
+
+Round 2 changes on top of the round 1 staged work (the Go test files, the
+three wiki pages and the changelog are unchanged):
+
+- `.review-validation` (new, versioned): declares
+  `scripts\test-companion.ps1` and `npm test` as the mandatory code-review
+  validation commands, with `#` comments explaining why `ghog day` cannot be
+  the floor here.
+- `docs/v0.0.24/plan.v0.0.24.minimize_loop.md`: the intro, the plan goal and
+  its step list now name five steps. Step 4 is renamed "Acceptance
+  scenarios, documentation and the VSIX build", and the unplug is dropped
+  from its issues, fix intent, expected outcome, rollout and completion
+  criteria. A criterion bullet points to Step 5, and the time-gated note no
+  longer names the unplug. The split guidance also names
+  `minimize_scenario_windows_test.go`. The new "Step 5. Manual three-to-one
+  unplug check" has analysis, implementation (rollout sequence, completion
+  criteria including a commit-named VSIX) and addendums. Q11 points to the
+  Step 5 section, and Q12 (the split) and Q13 (the declared floor) are
+  added.
+- `docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md`: the opening theme
+  sentence names five steps. The Step 4 heading follows the plan rename, its
+  analysis reads Yes with the reason for the re-check, and its goal and
+  expectations drop the unplug. Its "Missing work for Step 4" section is
+  removed, and two bullets record the plan amendment and the declared floor.
+  The coverage and feature notes point to Step 5. A not-started Step 5
+  section is added. The document-level line stays `No`.
+
+### Change summary for step 4 minimize_loop (round 2)
+
+Staged paths:
+
+- `A .review-validation`
+- `M CHANGELOG.md`
+- `A companion/minimize_acceptance_windows_test.go`
+- `M companion/minimize_hook_windows_test.go`
+- `A companion/minimize_scenario_windows_test.go`
+- `M docs/v0.0.24/plan.v0.0.24.minimize_loop.md`
+- `M docs/v0.0.24/plan.v0.0.24.minimize_loop.validation.md`
+- `M wiki/explanation/how-the-overlay-stays-inside-its-window.md`
+- `M wiki/reference/display-triggers.md`
+- `M wiki/reference/logs-and-processes.md`
+
+Unstaged on purpose: `docs/v0.0.24/review.code.v0.0.24.minimize_loop.md`, which
+the exchange writes; it is committed after the review, as in Step 3.
+
+Root `a.commit` groups (formatted by `wac`, `commit-plan-check` ready):
+
+1. `chore(review): declare the code-review floor`: `.review-validation`.
+2. `test(minimize_loop): replay acceptance cases`: the runner, the
+   acceptance tests, and the hook test header.
+3. `docs(minimize_loop): document observed-edge minimize`: the three wiki
+   pages.
+4. `docs(minimize_loop): add 0.0.24 changelog entry`: `CHANGELOG.md`.
+5. `docs(minimize_loop): move unplug check to step 5`: the plan.
+6. `docs(minimize_loop): record step 4 validation`: the validation plan,
+   which now marks Step 4 `Yes`, so it carries the exact `pw` marker and
+   comes last.
+
+### Human guidance and writer response for step 4 minimize_loop (round 2)
+
+Human guidance:
+
+#### Forced resume decision for step 4 minimize_loop (round 2)
+
+The requestor's `wait-answer` timed out while no answer was published, and the
+exchange was recorded as escalated. The human decided this was a stopped
+handoff rather than a failure: no reviewer session was running when the
+request was published, and a reviewer is now waiting for this resolution to
+start the review. The round 1 request, its evidence and the staged work are
+unchanged, so round 1 resumes with the same request.
+
+Writer response:
+
+Both round 1 findings are accepted, with no disagreement. The human made the
+two decisions they needed:
+
+- The manual unplug sequencing is resolved by the plan change the round 1
+  writer instructions offered: the unplug is placed after the commit gate as
+  its own Step 5 (decision Q12), so it runs on the commit-named build and its
+  evidence names that commit.
+- The validation floor is resolved by the versioned `.review-validation`
+  declaration of the real gates (decision Q13), which both pass. That
+  project-level change is staged as its own `chore(review)` group, first in
+  `a.commit`.
+
+The staged test and documentation groups are unchanged, as the round 1
+writer instructions asked. The regrouped `a.commit` adds the floor, plan and
+validation groups. The validation group now carries the `record step 4
+validation` marker because Step 4 reads `Yes`.
+
+### Reviewer focus for step 4 minimize_loop (round 2)
+
+Check the exact plan step, staged implementation, test evidence, repaired path inventory, and a.commit accuracy.
+
+<!-- review-entry-id: request-step-4-round-2 -->
+
+## Round 2 by reviewer - Step 4
+
+- Recorded: 2026-09-26T09:21:26+02:00
+- Exchange: code/code/v0.0.24/minimize_loop
+- Umbrella: none
+- Reviewed document: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+- Requestor LLM nature: claude
+- Reviewer LLM nature: codex
+- Implementation step: 4
+- Outcome: answer
+
+### Assessed index identity for step 4 minimize_loop (exchange 1) (round 2)
+
+Baseline index tree: 4b38a048f920b8b8cb6ade92f78e700aea338c6b
+
+Assessed index tree: 4b38a048f920b8b8cb6ade92f78e700aea338c6b
+
+### Implementation check for step 4 minimize_loop (exchange 1) (round 2)
+
+Result:
+
+Yes. Step 4 has been fully implemented under the amended five-step plan. The 17 controller-level acceptance subtests cover the 16 automated design rows (the event-order row has two variants), with focused click and restore tests and a four-window replay of the recorded unplug timeline. The runner drives the production controller entry points through the window seam and asserts commands, observed phases, edges and decisive logs. The three wiki pages and changelog describe the shipped observed-edge behavior, and the requestor reports successful Go and TypeScript suites, format/vet, completion greps, acceptable Markdown findings, the pure-model coverage gate and `build.bat` packaging. The real unplug is the separately defined Step 5 and remains unstarted.
+
+Architecture: no production code changes in this step; the new test runner remains in separate files below the 650-line ceiling and uses the existing fake window seam. The pre-existing Step 2 controller/adapter and global-activeApp concerns and oversized main file remain outside this step. No new architecture defect is identified.
+
+Performance: production hot paths and file IO are unchanged. The test runner advances a fixed number of controllers over scripted milliseconds with a short pending event list; no meaningful performance issue is introduced.
+
+Unit coverage: the configured gate measures the pure model, not the Win32 adapter; the requestor reports it green. The new test-only top-level helpers and type are referenced by the acceptance cases. The unmeasured adapter functions await real-window exercise in Step 5, as plan Q08 specifies. No step-specific unit coverage gap is found.
+
+Feature integrity: no production behavior or diagnostics are changed in this staged step. The documentation and release entry reflect the earlier implementation. The validation plan's first Step 4 sentence is exactly `Yes. Step 4 has been fully implemented.`; its document-level status remains No because Step 5 is pending. No Step 4 missing-work section remains.
+
+Validation plan effects:
+
+The requestor staged the Step 4 validation section with the exact Yes sentence, detailed acceptance and gate evidence, and the amended Step 4 scope. It also added an unstarted Step 5 section and kept the document-level status No. I made no validation-plan edit in this round; the Step 4 rows already match the independently assessed state.
+
+### Pre-repair mandatory checks and coverage for step 4 minimize_loop (exchange 1) (round 2)
+
+Before assessment, the request-time index tree and reviewer baseline both were `4b38a048f920b8b8cb6ade92f78e700aea338c6b`. The validation plan's staged blob was `fd56365135824c28d2014e3317ae9ab73ef3b1d8`. No reviewer repair was authorized or needed, so no pre-repair validation command was run and no repair patch was attributed.
+
+### Resolved validation set and sources for step 4 minimize_loop (exchange 1) (round 2)
+
+The request declares project commands `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test-companion.ps1` and `npm test`, both supplied by the staged, versioned `.review-validation`; the requestor reports both passing. Plan additions are `ghog day` with expected exit 9 in this non-pytest project, format/vet, the two completion greps, Markdown lint with MD013 table-row allowance, and `build.bat` with `OK: Packaged`; the requestor reports their stated outcomes. The nonzero `ghog day` is an explicitly expected plan-gate observation, not the project's mandatory review floor. I did not rerun the requestor validation set or coverage.
+
+### Resolver drift and direction for step 4 minimize_loop (exchange 1) (round 2)
+
+No drift found. The staged `.review-validation` has exactly the two project commands in the request, and the amended Step 4 plan retains the listed gate, format, grep, lint and build commands. The shared resolver's declaration rule replaces its built-in default with the nonempty versioned project list; the plan additions remain labeled `plan`.
+
+### Repository state around validation for step 4 minimize_loop (exchange 1) (round 2)
+
+The live index tree matched the request-time tree before assessment and remained the same afterward. Umbrella: none, so its digest is not applicable and unchanged. Validation-state comparison over every staged path, the validation plan and the known ghog artifacts returned acceptable with no changed tracked, untracked or ignored path. I changed no implementation file, test, review metadata or commit grouping.
+
+### Repair inventory for step 4 minimize_loop (exchange 1) (round 2)
+
+Repairs made: None.
+
+Paths staged: None.
+
+### Commit plan assessment for step 4 minimize_loop (exchange 1) (round 2)
+
+Independent `commit-plan-check.bat --format json` returned `state=valid`, `ready=true`, no diagnostics, and all ten staged paths in six ordered groups. The groups accurately separate the project validation declaration, three acceptance test files, three wiki pages, changelog, amended plan, and Step 4 validation record. The two new plan decisions and Step 5 scope are correctly in the plan group; no amendment to `a.commit` is needed. This mechanical pass is one part of the readiness floor, not commit authority.
+
+### Findings and boundaries for step 4 minimize_loop (exchange 1) (round 2)
+
+Unresolved findings: None.
+
+Boundary-crossing work: None.
+
+### Human guidance response for step 4 minimize_loop (exchange 1) (round 2)
+
+Human guidance:
+
+Forced resume decision for step 4 minimize_loop (round 2): the requestor's earlier wait-answer timeout was a stopped handoff while no reviewer was running; a reviewer has now resumed the request. The human directed the original round 1 request to resume with unchanged evidence.
+
+Guidance response:
+
+I resumed through the typed reviewer migration, identity, claim, status and wait-request gates, then reviewed the current round 2 request and its new staged tree. The forced-resume guidance authorizes no implementation repair and does not override the evidence or disposition checks.
+
+### Writer instructions for step 4 minimize_loop (exchange 1) (round 2)
+
+No further Step 4 repair is requested. Keep the Step 5 manual unplug and its commit-named build and log evidence in the separate Step 5 workflow. The advisory recommendation does not authorize a commit.
+
+### Decision rationale for step 4 minimize_loop (exchange 1) (round 2)
+
+Commit-ready is recommended for Step 4. Exact code identity, round 2, occurrence 1 and request-time index tree agree. The amended Step 4 is complete. The requestor's mandatory project Go and TypeScript gates passed, the plan's expected `ghog day` result is documented, and the static coverage check found no new gap. All staged work is attributable to the declared floor, tests, docs, plan and validation record. No current or carried finding remains; the round made no substantive repair. The independently checked `a.commit` groups are accurate. Step 5 remains separately pending, so this recommendation is limited to Step 4.
+
+### Final reviewer decision for step 4 minimize_loop (exchange 1) (round 2)
+
+Decision: commit-ready (advisory). The evidence floor is complete, but this recommendation does not authorize a commit; authority remains at the durable human gate.
+
+<!-- review-entry-id: answer-step-4-round-2 -->
+
+## Round 2 by human - Step 4 - human-confirmation
+
+- Recorded: 2026-09-26T09:37:15+02:00
+- Exchange: code/code/v0.0.24/minimize_loop
+- Umbrella: none
+- Reviewed document: docs/v0.0.24/plan.v0.0.24.minimize_loop.md
+- Requestor LLM nature: claude
+- Reviewer LLM nature: codex
+- Implementation step: 4
+- Outcome: human-confirmation
+
+Human choice: Commit
+Outcome: continue-owning-workflow
+
+<!-- review-entry-id: human-confirmation-round-2 -->
