@@ -9,7 +9,10 @@ package main
 // after an unsettled restore, own calls stamped after their after-reading,
 // late events that only log, and the session latch after an unsettled replay.
 // v0.0.24 step 3 adds the interception cap log lines: the trip on the third
-// edge within 2 s, and the resume after 5 s without any edge.
+// edge within 2 s, and the resume after 5 s without any edge. v0.0.24 step 4
+// reuses fakeMinimizeWindow in the scenario runner of
+// minimize_scenario_windows_test.go, which drives the acceptance scenarios of
+// minimize_acceptance_windows_test.go.
 
 import (
 	"bytes"
