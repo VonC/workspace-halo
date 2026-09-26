@@ -2,11 +2,12 @@
 
 No, it is not implemented.
 
-This document tracks the four steps of
+This document tracks the five steps of
 [plan.v0.0.24.minimize_loop.md](plan.v0.0.24.minimize_loop.md): the minimize
 code split, the observation model with own-call absorption and session latch,
-the interception cap, and the acceptance scenarios with documentation and the
-manual unplug. Steps 1, 2 and 3 are implemented; Step 4 has not started.
+the interception cap, the acceptance scenarios with documentation and the VSIX
+build, and the manual unplug. Steps 1 to 4 are implemented; Step 5, the manual
+three-to-one unplug on the committed build, has not started.
 
 > Initial-skeleton note: this first version was written by the `write-plans`
 > skill, before any implementation check. Every section that needs a check
@@ -727,14 +728,23 @@ No existing feature or reporting capability appears impaired.
 
 ---
 
-## Step 4. Acceptance scenarios, documentation and the unplug check
+## Step 4. Acceptance scenarios, documentation and the VSIX build
 
 ### Analysis of Step 4 implementation state
 
-Not started. Step 4 is not implemented because no acceptance scenario exists,
-the wiki still describes the event-driven interception with only the 75 ms
-replay delay, `CHANGELOG.md` has no 0.0.24 section, and no manual unplug has
-been run with the new host.
+Yes. Step 4 has been fully implemented.
+
+Every design acceptance row has a passing controller-level scenario, and the
+recorded four-window unplug timeline replays with one restore attempt per
+window. The two wiki pages, the log reference and the changelog are updated,
+the completion greps and markdownlint pass (only MD013 on table rows), and
+`build.bat` packages the VSIX. The first check of this step recorded `No`
+because the manual unplug was still part of it. Round 1 of the Step 4 code
+review found that the plan installed the committed build for that unplug
+while a review can only recommend a commit for a complete step. The plan now
+moves the unplug to its own Step 5, after the Step 4 commit (decision Q12),
+and this re-check applies the amended Step 4 criteria. The same review round
+also led to the versioned `.review-validation` floor (decision Q13).
 
 ### Goal for Step 4
 
@@ -742,9 +752,7 @@ Replay every design acceptance case and the recorded four-window unplug
 timeline through `minimizeController` with scripted fake windows and late,
 reordered events; update `wiki/reference/display-triggers.md`,
 `wiki/explanation/how-the-overlay-stays-inside-its-window.md`,
-`wiki/reference/logs-and-processes.md` and `CHANGELOG.md`; build the VSIX and
-run the manual three-to-one unplug with four VS Code windows, keeping the log
-lines as evidence.
+`wiki/reference/logs-and-processes.md` and `CHANGELOG.md`; build the VSIX.
 
 ### Step 4 improvement expectations
 
@@ -755,6 +763,226 @@ lines as evidence.
   the cap values, and the explanation page covers the let-through cases.
 - `build.bat` exits 0, and markdownlint reports nothing on the four updated
   Markdown files beyond MD013 on table rows.
+
+### What was implemented for Step 4
+
+- **Scenario runner**: new `companion/minimize_scenario_windows_test.go`
+  (226 lines) drives one or more `minimizeController`s on a shared fake clock.
+  At each millisecond it applies the scripted steps of that tick (external
+  minimize, external restore, click, deferred own command, late apply of a
+  deferred call, host-thread stall, host restart). Then, unless the thread is
+  stalled, it delivers the due WinEvents and runs the 25 ms tick on every
+  controller. `minimizeScenarioWindow` wraps `fakeMinimizeWindow` and turns
+  every minimized-state change, own calls included, into a WinEvent. The
+  n-th event of window i is delivered `lags[(n+i) % len(lags)]` ms later, so
+  events can arrive late, reordered or lost (`minimizeEventLost`, or no lag
+  list at all). Steps must be in tick order, and `run` can continue a
+  scenario for later assertions.
+- **Acceptance scenarios**: new `companion/minimize_acceptance_windows_test.go`
+  (408 lines). `TestMinimizeAcceptanceCases` has 17 sub-tests, one per
+  automated design acceptance row. The "any order, or 3 s late" row has two
+  sub-tests, one in order and one reordered. The manual unplug row is the
+  rollout check. Each sub-test asserts the restore attempts, the
+  `minimize intercepted` lines, the `minimize edge` lines, the final phase on
+  the observed state, the decisive log lines in order, and any forbidden
+  line. The 20 s edge stream continues past its table checks: it proves no
+  resume at 27599, the resume at 27600 (5 s after the last edge), then a new
+  intercept. `TestMinimizeAcceptanceClickDuringPrimingStillReplays` and
+  `TestMinimizeAcceptanceRestoreAfterReplayStaysRestored` cover the user
+  actions around the replay.
+  `TestMinimizeAcceptanceRecordedUnplugTimeline` runs four controllers:
+  w4, w1 and w2 are minimized at 0, 2.7 s and 4.0 s from 10000, w3 stays
+  shown, and every WinEvent arrives 3 to 6 s late and reordered. w2's
+  `SW_SHOWNOACTIVATE` never applies, so it uses the single `SW_RESTORE`
+  fallback. For each minimized window the test checks one restore attempt,
+  one replay, a final Minimized with the halo, one `minimize intercepted` and
+  one edge line, and no restore command after the first late event. w3 gets
+  no command.
+- **Test file split (plan split guidance)**: the runner and the scenarios
+  would have taken `minimize_hook_windows_test.go` from 323 to about 950
+  lines, so they went to new files as the plan's split guidance asks. The
+  acceptance file alone reached 620 lines, in the 550-to-650 risk band, so the
+  runner was split out by responsibility. `minimize_hook_windows_test.go`
+  (325 lines) only gains a header sentence pointing to the runner that reuses
+  `fakeMinimizeWindow`.
+- **`wiki/reference/display-triggers.md`** (88 lines): the `minimized` row
+  now names a pending replay and an unsettled own call. A new "Minimize
+  interception rules" section covers edges, the four interception
+  conditions, the skip reasons and their precedence, the Priming
+  cancellation, the session latch and the cap. The timing constants table
+  gains `Lateness bound` 500 ms, `Settle timeout` 1000 ms,
+  `Interception cap` 2 in 2000 ms and `Cap quiet period` 5000 ms.
+- **`wiki/explanation/how-the-overlay-stays-inside-its-window.md`**
+  (87 lines): the replay section now starts from an observed minimize the host
+  did not cause. A new section explains that WinEvents only trigger an
+  observation, how own calls are absorbed, why a minimize during Priming
+  cancels the replay, and why unknown-age, uncertain own call, capped and
+  latched minimizes go through without the halo.
+- **`wiki/reference/logs-and-processes.md`** (69 lines): lists the
+  `minimize edge`, `minimize event`, `own restore`, `own replay`,
+  `own call unsettled`, `minimize interception disabled`, `suspended` and
+  `resumed` lines next to the three kept interception lines.
+- **`CHANGELOG.md`** (224 lines): a `## 0.0.24` section under `## Unreleased`
+  covers the unplug loop fix, one restore per interception with the halo kept
+  for prompt minimizes, and the logged let-through cases.
+- **Validation evidence**: `go test -v` gives 61 top-level `--- PASS` lines
+  (57 + 4), 17 acceptance sub-tests and 11 fuzz seeds. `gofmt -l` prints
+  nothing and `go vet ./...` exits 0. The first completion grep finds the
+  three constants rows (`display-triggers.md:84-86`), and the second finds
+  `CHANGELOG.md:5`. markdownlint-cli2 on the four files reports 13 findings,
+  all MD013 on `display-triggers.md` table rows (the priority table and the
+  timing constants table), as the plan allows. `ghog day` ends at `exit=9`
+  ("not a pytest project"). `scripts\test-companion.ps1` prints
+  `ok  workspace-halo/companion`, and `npm test` exits 0 (8 pass). The
+  pure-model coverage gate still passes. `build.bat` exits 0 and prints
+  `OK: Packaged workspace-halo-0.0.23-3e4d05f-dirty-win32-x64.vsix`, built
+  from the uncommitted tree.
+- **Line-budget variance (advisory)**: the plan expected
+  `minimize_hook_windows_test.go` at about 480 lines; the split leaves it at
+  325 plus the two new files (226 and 408), all below 550.
+  `display-triggers.md` is 88 (about 77 expected),
+  `how-the-overlay-stays-inside-its-window.md` 87 (about 75),
+  `logs-and-processes.md` 69 (about 54) and `CHANGELOG.md` 224 (about 219).
+- **Plan amendment after code review round 1 (Q12)**: `plan.v0.0.24.minimize_loop.md`
+  now has five steps. Step 4 is renamed "Acceptance scenarios, documentation
+  and the VSIX build" and ends with the build, and its completion criteria
+  drop the manual unplug. The new Step 5, "Manual three-to-one unplug check",
+  carries the rollout sequence (commit, commit-named build, install, unplug,
+  per-window excerpts, per-action table) and the unplug completion criterion.
+  Q11 now points the evidence to the Step 5 section, and the Step 4 split
+  guidance names the runner file.
+- **Declared review validation floor (Q13)**: new versioned root
+  `.review-validation` declares `scripts\test-companion.ps1` and `npm test`,
+  one command per line with `#` comments. The llm-shared loader
+  `load_project_validation_commands` reads exactly those two commands, so a
+  code-review request no longer inherits the built-in `ghog day` floor, which
+  always ends at exit 9 in this non-pytest repository.
+
+### New types or classes introduced for Step 4
+
+All new types are test-only and live in `minimize_scenario_windows_test.go`
+unless noted:
+
+- `minimizeScenarioKind` and its seven step kinds: the external actions a
+  scenario scripts.
+- `minimizeScenarioStep`: one action at a tick on one window, with the
+  `scenarioMinimize` and `scenarioRestore` shorthands.
+- `minimizeScenarioEvent`: a generated WinEvent with its generation and due
+  ticks.
+- `minimizeScenarioWindow`: a `fakeMinimizeWindow` that emits a WinEvent on
+  each minimized-state change and records its restore command ticks and its
+  first delivery.
+- `minimizeScenario`: the shared clock, the hosts and their logs, the pending
+  events, and the stall, with `run`, `apply`, `deliverDue`, `startHost` and
+  `requireOrderedLog`.
+- `minimizeAcceptanceCase` (in `minimize_acceptance_windows_test.go`): one
+  acceptance row and its expected outcome.
+
+No production type is added or changed.
+
+### Architecture check for Step 4
+
+- **No production change**: Step 4 touches only test files, the wiki and the
+  changelog, so the pure model, the controller and the Win32 adapter keep the
+  Step 3 layout.
+- **Tests go through the port**: the runner reaches the controller only
+  through its production entry points (`newMinimizeController`, `observe`,
+  `onEvent`) and the `minimizeWindow` seam. It reads `model` fields only in
+  assertions, as the Step 2 and Step 3 controller tests do. No Win32 call is
+  made from a test.
+- **Split by responsibility**: the runner (the test harness) and the
+  scenarios (the acceptance cases) are separate files, and both reuse the
+  one `fakeMinimizeWindow` rather than a copy.
+- **Carried over from Step 2**: the controller still shares
+  `minimize_hook_windows.go` with the Win32 adapter (plan Q01), the callback
+  still reaches it through the global `activeApp`, and `main_windows.go` is
+  still 1846 lines (deferred by the plan). Step 4 does not touch any of them.
+
+Yes, there is something to address: nothing new, but the three Step 2
+carry-overs remain (controller and adapter in one file, the global
+`activeApp`, the oversized `main_windows.go`). Step 4 introduces no
+DDD-Hexagonal violation or smell.
+
+### Performance check for Step 4
+
+- **No host-path change**: no production code changed, so the per-tick and
+  per-event cost of Step 3 stands.
+- **Test-only cost**: the runner steps one millisecond at a time. Each
+  millisecond scans the pending events (a handful) and, every 25 ms, observes
+  each controller, which is linear in simulated time. The longest scenario
+  (the 90 s latch) runs about 91000 iterations. Removing a delivered event
+  shifts the short pending slice, and no scenario sorts. The whole Go suite
+  still runs in a few seconds.
+- **File IO**: none added; the scenario logs go to in-memory buffers.
+
+No, there is no performance issue that needs to be addressed for Step 4.
+
+### Unit test coverage check for Step 4
+
+The repository has no pytest suite and no configured coverage threshold. The
+plan's pure-model coverage gate (Q08) measures only `minimize_windows.go`;
+the hook file is evidence-only. The new files are controller-level
+acceptance tests, which carry no coverage target.
+
+- **`minimize_windows.go`**: unchanged, still at 100% of its statements from
+  its three unit test files. The pure-model gate finds no zero-count block.
+- **`minimize_hook_windows.go` controller**: unchanged, still at 100% for
+  `newMinimizeController`, `observe`, `onEvent`, `logEdge`, `intercept`,
+  `replay`, `ownRestore`, `ownReplay` and `settleOwnCall`. The acceptance
+  scenarios exercise them again end to end.
+- **`minimize_hook_windows.go` Win32 adapter**: `installMinimizeHook`,
+  `minimizeWinEventProc`, `isIconic`, `showWindow` and `composeHalo` stay at
+  0%, unchanged by this step. They call Win32 on a real window, as plan Q08
+  accepts; the Step 5 manual unplug is what exercises them.
+- **`main_windows.go`**: not touched; legacy, below 100%, deferred by the
+  plan.
+
+Yes, there is a unit-tested class below 100% that needs completing for
+Step 4: as in Steps 2 and 3, `minimize_hook_windows.go` is below 100% because
+of its five Win32 adapter functions (evidence-only by plan Q08), and
+`main_windows.go` stays below 100% (legacy, deferred). No, none of the
+top-level symbols of the files outside the gate is unreferenced: every runner
+type and helper is used by the acceptance tests.
+
+### Feature integrity for Step 4
+
+- **Existing feature behavior**: no production code changed; the host binary
+  behaves as after Step 3, and the existing 57 Go tests and 8 TypeScript
+  tests pass.
+- **Documentation**: the wiki now describes the observed-edge interception
+  that Steps 2 and 3 shipped. It no longer describes the old event-driven
+  interception, and it lists every constant and log line the host uses.
+- **Reporting or diagnostics**: unchanged; the log reference now documents
+  the lines already written since Steps 2 and 3.
+- **Compatibility or rollout note**: the changelog entry sits under
+  `## 0.0.24` while `package.json` is still 0.0.23; the release step bumps
+  the version. The manual unplug evidence belongs to Step 5. The new
+  `.review-validation` changes only the code-review floor; `build.bat`,
+  `ghog` and the plan's gate loop are unchanged.
+
+No existing feature or reporting capability appears impaired.
+
+---
+
+## Step 5. Manual three-to-one unplug check
+
+### Analysis of Step 5 implementation state
+
+Not started. Step 5 is not implemented because the VSIX has not been built
+from the committed Step 4 tree and installed, the three-to-one unplug has not
+been run with four windows, and no per-window log excerpt or per-action
+verdict table has been recorded.
+
+### Goal for Step 5
+
+Build the VSIX from the committed Step 4 tree, install it, run the manual
+three-to-one unplug with four VS Code windows, and record the per-window
+timestamped log excerpts and the per-action verdict table here.
+
+### Step 5 improvement expectations
+
+- `build.bat` prints `OK: Packaged` with a VSIX name carrying the Step 4
+  commit and no `dirty` marker.
 - The manual unplug log shows no repeated interception cycle and no
   unsolicited delayed or repeated return to the foreground, judged per
   external minimize action in a table (window, edge timestamp, age bound,
@@ -762,26 +990,26 @@ lines as evidence.
   verdict) backed by per-window timestamped log excerpts; one attempt may
   include a single `SW_RESTORE` fallback.
 
-### What was implemented for Step 4
+### What was implemented for Step 5
 
 _(empty: no check has taken place yet.)_.
 
-### New types or classes introduced for Step 4
+### New types or classes introduced for Step 5
 
 _(empty: no check has taken place yet.)_.
 
-### Architecture check for Step 4
+### Architecture check for Step 5
 
 _(empty: no check has taken place yet.)_.
 
-### Performance check for Step 4
+### Performance check for Step 5
 
 _(empty: no check has taken place yet.)_.
 
-### Unit test coverage check for Step 4
+### Unit test coverage check for Step 5
 
 _(empty: no check has taken place yet.)_.
 
-### Feature integrity for Step 4
+### Feature integrity for Step 5
 
 _(empty: no check has taken place yet.)_.
