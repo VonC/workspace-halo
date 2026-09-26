@@ -13,7 +13,8 @@ The source tree of the extension, its native host, and their build scripts.
 | `bin/win32-x64/` | The compiled `workspace-halo-host.exe` packaged into the VSIX |
 | `dist/` | The bundled `extension.js` and generated `build-provenance.json` |
 | `images/` | The extension icon, its transparent variant, and the README screenshot |
-| `docs/` | `poc.md`, the original Win32 integration experiment and its acceptance results |
+| `docs/` | `poc.md`, the original Win32 integration experiment and its acceptance results, and one `vX.Y.Z/` folder per effort (draft, requirement, design, plans, review transcripts); none of it is packaged |
+| `.reviews/` | Git-ignored review exchange artifacts and step notes; never packaged |
 | `wiki/` | This Diátaxis documentation set |
 
 ## Entry-point files
