@@ -1,13 +1,14 @@
 # v0.0.24 minimize_loop implementation tracking and validation
 
-No, it is not implemented.
+Yes, it is implemented.
 
 This document tracks the five steps of
 [plan.v0.0.24.minimize_loop.md](plan.v0.0.24.minimize_loop.md): the minimize
 code split, the observation model with own-call absorption and session latch,
 the interception cap, the acceptance scenarios with documentation and the VSIX
-build, and the manual unplug. Steps 1 to 4 are implemented; Step 5, the manual
-three-to-one unplug on the committed build, has not started.
+build, and the manual unplug. All five steps are implemented: on the committed
+`c2f34cd` build, two manual three-to-one unplugs, the second with all four
+hosts bound before the trigger, pass for every minimize action.
 
 > Initial-skeleton note: this first version was written by the `write-plans`
 > skill, before any implementation check. Every section that needs a check
@@ -968,10 +969,20 @@ No existing feature or reporting capability appears impaired.
 
 ### Analysis of Step 5 implementation state
 
-Not started. Step 5 is not implemented because the VSIX has not been built
-from the committed Step 4 tree and installed, the three-to-one unplug has not
-been run with four windows, and no per-window log excerpt or per-action
-verdict table has been recorded.
+Yes. Step 5 has been fully implemented.
+
+The VSIX was built from the committed tree at `c2f34cd`, which holds Steps 1
+to 4, with no `dirty` marker, and installed. The unplug ran twice on the same
+four hosts. In run 1 (15:40), w3's host bound only 40 s after the unplug, so
+run 1 proves the three windows it observed: w1, w2 and w4 were each
+intercepted once, with one `own restore` and no fallback, and no `own restore`
+followed the accepted replay. Reviewer round 1 asked for a run with all four
+hosts bound first. Run 2 (20:19) is that complete observation: the four hosts
+were bound before the unplug and each logged ticks through the whole interval.
+Windows minimized only w4, which the host let through with
+`skip reason=unknown-age`; w1, w2 and w3 stayed shown. Every row of both
+per-action tables passes, and no `minimize intercepted` line lacks a matching
+external edge.
 
 ### Goal for Step 5
 
@@ -992,24 +1003,271 @@ timestamped log excerpts and the per-action verdict table here.
 
 ### What was implemented for Step 5
 
-_(empty: no check has taken place yet.)_.
+- **Commit-named build**: from a clean `minimize_loop` at `c2f34cd` (the
+  Step 4 commits `9e9c763`, `72faf1f` and `4381d72` plus their validation and
+  review records), `build.bat` exits 0. It prints `INFO: Building Workspace
+  Halo 0.0.23 from c2f34cd (dirty=false)`, `ok workspace-halo/companion`,
+  `# pass 8`, `# fail 0` and `OK: Packaged
+  workspace-halo-0.0.23-c2f34cd-win32-x64.vsix (1476215 bytes)`, and
+  `git status --short` stays empty.
+- **Install and host identity**: `install.bat` exits 0 with `OK: Installed
+  workspace-halo-0.0.23-c2f34cd-win32-x64.vsix`. The installed
+  `dist/build-provenance.json` names `c2f34cd` with `dirty=false`, the
+  installed `workspace-halo-host.exe` has the same SHA-256 as the built one,
+  and `go version -m` on it prints `vcs.revision=c2f34cd7f103...` and
+  `vcs.modified=false`. Because a host started before the install keeps its
+  old image, the running hosts were judged by start time: all four started
+  after the install (13:47:58 to 15:37:32), each tied to its window by its
+  `Native host started` line. The same four host processes ran both unplugs.
+- **Setup**: four workspace windows over three external monitors, two video
+  cables. For each run the operator pulled both cables one after the other as
+  fast as possible, reported a 60 s wait, then replugged both one after the
+  other, and saw no window come back and nothing take the foreground. The log
+  timestamps give the observed interval from the first minimize edge to the
+  replug restore edge (about 95 s in run 1, 120 s in run 2); they do not
+  time the physical cable actions.
+- **Evidence format**: w1, w2, w3 and w4 are the log directories `window1`,
+  `window2`, `window3` and `window5`. The excerpts keep the plan's filter
+  (`minimize edge`, `minimize event`, `own restore`, `own replay`,
+  `own call unsettled`, `minimize intercepted`, `minimize replay`,
+  `minimize interception`, `visibility=minimized`) from 10 s before the first
+  minimize edge to 5 s after the replug restore edge, which covers the plan's
+  60 s after the unplug. Times are local on 2026-09-26, without the
+  `workspace-halo:` prefix and the date; no workspace name, window title or
+  window handle is recorded.
+
+#### Step 5 run 1 binding precondition
+
+w3's workspace is open in two windows, so its host logged
+`startup window identification unavailable` at 15:37:32 and bound to its
+window only at 15:41:15, on a focus proposal. Before that it had no minimize
+controller and no hook: `main` creates both only after `acquireTarget`
+returns. Run 1 therefore observed w1, w2 and w4 only; w3's first 40 s after
+the unplug are unobserved, and no conclusion is drawn about w3 for run 1.
+
+#### Step 5 run 1 excerpt for w1
+
+```text
+15:40:35.500059 minimize edge: shown->iconic age<=156ms action=intercept
+15:40:35.685412 own restore: before=iconic after=shown fallback=false
+15:40:35.926206 minimize intercepted: restored=true replay-in=75ms
+15:40:35.945331 minimize replay requested after halo composition
+15:40:36.118511 own replay: before=shown after=iconic
+15:40:36.119211 minimize replay accepted with composed halo
+15:40:36.141450 minimize event: start age=735ms
+15:40:36.147417 minimize event: end age=454ms
+15:40:36.147938 minimize event: start age=188ms
+15:42:11.138975 minimize edge: iconic->shown action=restore-honored
+15:42:11.622039 minimize event: end age=391ms
+```
+
+#### Step 5 run 1 excerpt for w2
+
+```text
+15:40:35.192123 minimize edge: shown->iconic age<=78ms action=intercept
+15:40:35.571436 own restore: before=iconic after=shown fallback=false
+15:40:35.975778 minimize intercepted: restored=true replay-in=75ms
+15:40:36.087153 minimize event: start age=782ms
+15:40:36.092667 minimize replay requested after halo composition
+15:40:36.103305 own replay: before=shown after=iconic
+15:40:36.103305 minimize replay accepted with composed halo
+15:40:36.145774 minimize event: end age=579ms
+15:40:36.148457 minimize event: start age=47ms
+15:42:10.986579 minimize edge: iconic->shown action=restore-honored
+15:42:11.574850 minimize event: end age=484ms
+```
+
+#### Step 5 run 1 excerpt for w3
+
+```text
+(host unbound until 15:41:15: interval not observed, no line in the range)
+```
+
+#### Step 5 run 1 excerpt for w4
+
+```text
+15:40:35.411694 minimize edge: shown->iconic age<=62ms action=intercept
+15:40:35.567435 own restore: before=iconic after=shown fallback=false
+15:40:35.926206 minimize intercepted: restored=true replay-in=75ms
+15:40:36.007464 visibility=minimized focused=false minimized=false
+15:40:36.025490 minimize replay requested after halo composition
+15:40:36.035981 own replay: before=shown after=iconic
+15:40:36.035981 minimize replay accepted with composed halo
+15:40:36.143254 minimize event: start age=735ms
+15:40:36.145266 minimize event: end age=594ms
+15:40:36.147938 minimize event: start age=110ms
+15:42:10.058215 visibility=minimized focused=false minimized=true
+15:42:11.363565 minimize edge: iconic->shown action=restore-honored
+15:42:11.626891 minimize event: end age=328ms
+```
+
+#### Step 5 run 1 per-action verdict table
+
+One row per `minimize edge: shown->iconic` line. "Attempts" counts the
+`minimize intercepted` and `own restore` lines up to the next external edge
+of the same window (here the replug `iconic->shown` edge); "After replay"
+counts the `own restore` lines after `minimize replay accepted`.
+
+| Window | Edge | Age bound | Decision | Attempts | After replay | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| w2 | 15:40:35.192 | <=78ms | intercept | 1 / 1, `fallback=false` | 0 | pass |
+| w4 | 15:40:35.411 | <=62ms | intercept | 1 / 1, `fallback=false` | 0 | pass |
+| w1 | 15:40:35.500 | <=156ms | intercept | 1 / 1, `fallback=false` | 0 | pass |
+
+- **Event order in run 1**: w2's Windows minimize event
+  (`start age=782ms`, 15:40:36.087153) arrives after its interception and
+  before its replay (15:40:36.103305); w1's and w4's (`start age=735ms`)
+  arrive just after their replays. None of them causes an edge, a restore or
+  a second interception. The `start age=47ms` to `188ms` events are the own
+  replays' notifications, absorbed after the replay. On the replug each
+  observed window logs one `iconic->shown action=restore-honored` edge and no
+  own call. No `own call unsettled`, `minimize interception disabled`,
+  `suspended` or `resumed` line appears.
+- **Timeline difference**: the three observed windows were minimized within
+  308 ms of each other, against 0, 2.7 s and 4.0 s in the recorded 2026-09-24
+  unplug, because the two cables were pulled back to back. The verdict is per
+  action, so the compression does not change it.
+
+#### Step 5 run 2 binding precondition
+
+Run 2 used the same four host processes, with no reload. Each had bound to
+its own window before the unplug: w1 at 15:35:29, w2 at 15:37:38, w3 at
+15:41:15 and w4 at 13:47:59, each to a distinct window. From 20:18:58 to
+20:21:13 every host logged tick output (w1 20 lines, w2 17, w3 5, w4 22):
+`tick` calls the minimize observation before the gesture polls, so each
+logged gesture proves that the observation ran on that tick. w3's lines are
+only gestures because its visibility reason is still `activation`, set at
+binding, and that reason outranks alt-tab, taskbar hover and minimized until
+the window is focused and clicked; a minimize edge is logged by the
+controller independently of that reason. Gestures logged in the interval
+(alt-tab 20:19:17, taskbar hover 20:19:13 and 20:19:19, double-shift
+20:20:53 in w1) are operator input, not minimize actions.
+
+#### Step 5 run 2 excerpt for w1
+
+```text
+(no line in the range: observed throughout, no minimize edge, stayed shown)
+```
+
+#### Step 5 run 2 excerpt for w2
+
+```text
+(no line in the range: observed throughout, no minimize edge, stayed shown)
+```
+
+#### Step 5 run 2 excerpt for w3
+
+```text
+(no line in the range: observed throughout, no minimize edge, stayed shown)
+```
+
+#### Step 5 run 2 excerpt for w4
+
+```text
+20:19:08.342543 visibility=minimized focused=false minimized=true
+20:19:08.342543 minimize edge: shown->iconic age<=1000ms action=skip reason=unknown-age
+20:19:09.078735 minimize event: start age=1640ms
+20:19:15.932859 visibility=minimized focused=false minimized=true
+20:19:18.548390 visibility=minimized focused=false minimized=true
+20:19:21.303061 visibility=minimized focused=false minimized=true
+20:21:08.362909 minimize edge: iconic->shown action=restore-honored
+20:21:08.850222 minimize event: end age=469ms
+```
+
+#### Step 5 run 2 per-action verdict table
+
+Same columns as run 1; a skipped action has no interception and no replay.
+
+| Window | Edge | Age bound | Decision | Attempts | After replay | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| w4 | 20:19:08.342 | <=1000ms | skip, unknown-age | 0 / 0 | n/a | pass |
+
+- **Reading of run 2**: the last shown reading before the edge was up to
+  1000 ms old, above the 500 ms lateness bound, so the host could not prove
+  the minimize prompt and let it through without the halo, as the design's
+  unknown-age rule requires. The Windows event arrived 0.7 s later
+  (`start age=1640ms`) and changed nothing. The window stayed minimized
+  until the replug, when the host logged one `restore-honored` edge. The
+  repeated `visibility=minimized` lines follow the gesture overlays ending,
+  not new edges.
+- **Validation evidence**: `ghog day` ends at `exit=9` ("not a pytest
+  project") with its check step at `fail=0`; `build.bat` runs
+  `scripts\test-companion.ps1` (`ok workspace-halo/companion`) and `npm test`
+  (8 pass) before packaging, and both pass again before each review request.
+  No code, test or wiki file changed in this step.
 
 ### New types or classes introduced for Step 5
 
-_(empty: no check has taken place yet.)_.
+No type, class or test is introduced: Step 5 is a manual check on the
+committed build, and its only output is the evidence above.
 
 ### Architecture check for Step 5
 
-_(empty: no check has taken place yet.)_.
+- **No code change**: Step 5 builds, installs and observes the Step 4 tree;
+  the pure model, the controller and the Win32 adapter keep the Step 3
+  layout.
+- **Adapter proven on the real trigger**: `installMinimizeHook`,
+  `minimizeWinEventProc`, `isIconic`, `showWindow` and `composeHalo` ran on
+  real windows, through both the intercept path (run 1) and the unknown-age
+  skip (run 2). Late WinEvents only fed an observation, as the hexagonal
+  split intends: the adapter translates, the pure model decides.
+- **Carried over from Step 2**: the controller still shares
+  `minimize_hook_windows.go` with the Win32 adapter (plan Q01), the callback
+  still reaches it through the global `activeApp`, and `main_windows.go` is
+  still 1846 lines (deferred by the plan). Step 5 does not touch them.
+
+Yes, there is something to address: nothing new, but the three Step 2
+carry-overs remain (controller and adapter in one file, the global
+`activeApp`, the oversized `main_windows.go`). Step 5 introduces no
+DDD-Hexagonal violation or smell.
 
 ### Performance check for Step 5
 
-_(empty: no check has taken place yet.)_.
+- **No new `O(n^2)` or `O(n log n)` path**: no code changed.
+- **Hot-path bound**: the unplugs show the bounded path at work: per
+  minimized window, one edge, at most one own restore and one replay, then
+  absorbed WinEvents; the three windows that stayed shown in run 2 logged no
+  minimize line on any tick.
+- **File IO**: at most 13 minimize lines per window for a whole unplug and
+  replug, in line with the plan's one line per edge, own call and event.
+
+No, there is no performance issue that needs to be addressed for Step 5.
 
 ### Unit test coverage check for Step 5
 
-_(empty: no check has taken place yet.)_.
+The repository has no pytest suite and no configured coverage threshold; the
+plan's pure-model gate (Q08) measures only `minimize_windows.go`. Step 5 adds
+no code and no test, so the figures below are carried from the Step 4 check,
+not a new measurement.
+
+- **`minimize_windows.go`**: unchanged, at 100% of its statements in the
+  Step 4 check.
+- **`minimize_hook_windows.go` controller**: unchanged, at 100% for its
+  controller functions in the Step 4 check.
+- **`minimize_hook_windows.go` Win32 adapter**: its five adapter functions
+  stay at 0% in unit tests (evidence-only by plan Q08); these manual unplugs
+  are the evidence that exercises them.
+- **`main_windows.go`**: not touched; legacy, below 100%, deferred by the
+  plan.
+
+Yes, there is a unit-tested class below 100% that needs completing for
+Step 5: as in Steps 2 to 4, `minimize_hook_windows.go` is below 100% because
+of its five Win32 adapter functions (evidence-only by plan Q08, now exercised
+by these unplugs), and `main_windows.go` stays below 100% (legacy, deferred).
 
 ### Feature integrity for Step 5
 
-_(empty: no check has taken place yet.)_.
+- **Existing feature behavior**: the installed hosts bound, tracked
+  visibility and rendered in all four windows; on each replug Windows
+  restored the minimized windows and the host honored it.
+- **Reporting or diagnostics**: every decision of both unplugs has its log
+  line with its data (age bound, skip reason, before and after readings,
+  fallback, replay delay), as the log reference documents.
+- **Compatibility or rollout note**: the VSIX is named 0.0.23 because
+  `package.json` is bumped by the release step, while the changelog already
+  holds `## 0.0.24`. A workspace open in two windows binds only on a focus
+  proposal, and its activation halo stays until that window is focused and
+  clicked (w3 here); both are the existing startup and activation rules, left
+  unchanged.
+
+No existing feature or reporting capability appears impaired.
