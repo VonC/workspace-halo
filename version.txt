@@ -1,4 +1,4 @@
-0.0.24-SNAPSHOT -- Observed, Not Ordered
+0.0.24 -- Observed, Not Ordered
 
 The host trusts IsIconic readings over WinEvents that arrive late
 
