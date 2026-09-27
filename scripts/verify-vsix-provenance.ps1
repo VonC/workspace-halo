@@ -135,7 +135,22 @@ try {
     }
 
     if ($RequireVersionTag) {
-        $tagName = [string]$package.version
+        # Release tags are named v<version> since v0.0.23; the bare <version>
+        # form of earlier tags such as 0.0.22 is still accepted. rev-parse -q
+        # stays silent for a missing ref: any git stderr line would be a
+        # terminating error under ErrorActionPreference Stop.
+        $packageVersion = [string]$package.version
+        $tagName = $null
+        foreach ($candidate in @("v$packageVersion", $packageVersion)) {
+            $null = & git -C $root rev-parse -q --verify "refs/tags/$candidate"
+            if ($LASTEXITCODE -eq 0) {
+                $tagName = $candidate
+                break
+            }
+        }
+        if ($null -eq $tagName) {
+            throw "Local version tag 'v$packageVersion' (or '$packageVersion') does not exist"
+        }
         $tagRef = "refs/tags/$tagName"
         $tagTargetOutput = @(& git -C $root rev-list -n 1 $tagRef 2>$null)
         if ($LASTEXITCODE -ne 0 -or $tagTargetOutput.Count -eq 0) {

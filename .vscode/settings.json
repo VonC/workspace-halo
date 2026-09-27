@@ -24,7 +24,9 @@
     "replugged",
     "rrggbb",
     "SHOWNOACTIVATE",
+    "vscodeignore",
     "WASDK",
-    "winevent"
+    "winevent",
+    "xmqj"
   ]
 }

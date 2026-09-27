@@ -48,8 +48,9 @@ version.bat workspace-halo-0.0.21-debc8e2-win32-x64.vsix
 
 The audit reads the package and VSIX versions, full provenance SHA-1, native
 host VCS stamp, dirty state, and filename from the package. It rejects dirty
-packages, checks that a local tag named for the embedded version targets the
-embedded commit, then prints the file's SHA-256 digest.
+packages, checks that a local tag named for the embedded version, `v<version>`
+or the bare `<version>` of releases up to 0.0.22, targets the embedded commit,
+then prints the file's SHA-256 digest.
 
 ## Run the checks individually
 
