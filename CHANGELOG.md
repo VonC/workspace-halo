@@ -14,6 +14,12 @@
 - Let minimizes of unknown age, uncertain own calls, and capped or latched
   cases through without the halo, and log each decision in
   `native-host.log`.
+- Package only the extension runtime in the VSIX: the manifest, README,
+  changelog, license, icon, bundled extension and native host, without the
+  local review files, effort documents and build scripts.
+- Update the `fast-uri`, `js-yaml` and `undici` entries of the packaging
+  toolchain for twelve security advisories; none of them ships in the
+  extension.
 
 ## 0.0.23
 

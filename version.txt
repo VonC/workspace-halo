@@ -1,10 +1,48 @@
 0.0.24-SNAPSHOT -- Observed, Not Ordered
 
-Provisional title. The release notes for v0.0.24 are written by
-prepare_release_notes from the commits made since v0.0.23.
+The host trusts IsIconic readings over WinEvents that arrive late
 
-The effort is documented in docs/v0.0.24/: the native host now decides
-minimize interceptions from the window's observed state instead of
-WinEvent order, so a monitor unplug no longer makes the VS Code windows
-take turns coming back to the foreground. The same cycle updates the
-fast-uri, js-yaml and undici lock entries for their advisories.
+- Three Monitors to One, One Restore per Minimize
+  -- Unplugging a dock no longer sends VS Code windows back to the front
+- Nine Files and Twelve Advisories
+  -- A VSIX without review files and a lockfile past its CVEs
+
+This release fixes the minimize loop seen after a monitor unplug. The
+native host used to decide from WinEvent order, so minimize events that
+Windows delivered seconds late, or reordered, after a display change
+restarted the thumbnail-halo replay and restored windows nobody asked for.
+The host now reads IsIconic on every 25 ms tick, on each minimize event
+and around its own ShowWindow calls, and intercepts only a shown-to-iconic
+edge it did not cause, observed within 500 ms. Minimizes of unknown age,
+an own call that stays unsettled for 1 s, and more than two interceptions
+within 2 s per window go through without the halo, and every decision is
+one line in native-host.log.
+
+The release also tidies what ships and how it is built. The VSIX now holds
+only the manifest, the documents, the icon, the bundled extension and the
+native host, instead of 308 files that included the local review folder.
+The fast-uri, js-yaml and undici lockfile entries used by the packaging
+tool move past twelve Dependabot advisories, and senv.bat repairs a stale
+npm-lock filter path on its own.
+
+### Key changes
+
+- **Observed-edge minimize interception**: the pure model in
+  minimize_windows.go and the hook controller in minimize_hook_windows.go
+  replace the event-order state machine, with a 500 ms lateness bound, a
+  1 s settle timeout, a session latch and a per-window cap of two
+  interceptions in 2 s, rearmed after 5 s of quiet. Two manual
+  three-to-one unplugs on the committed build show at most one restore per
+  minimize and no window coming back on its own.
+
+- **A VSIX with only the extension runtime**: .vscodeignore now excludes
+  .reviews/, the docs/vX.Y.Z/ effort folders, .review-validation,
+  install.bat and version.bat, so the package drops from 308 files to 9
+  and no review artifact or step note leaves the machine that built it.
+
+- **Packaging toolchain past twelve advisories**: lockfile-only updates of
+  fast-uri to 3.1.8 (CVE-2026-18446, CVE-2026-75931, CVE-2026-75899,
+  CVE-2026-75975, CVE-2026-76172), js-yaml to 4.3.2 (CVE-2026-84375 and
+  GHSA-5p4m-2wfm-xmqj) and undici to 7.30.0 (CVE-2026-13697,
+  CVE-2026-16728, CVE-2026-16729, CVE-2026-14643, CVE-2026-15157), all
+  pulled in by @vscode/vsce and never packaged into the extension.
